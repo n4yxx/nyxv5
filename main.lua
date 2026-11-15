@@ -40,28 +40,28 @@ end
 
 local function checkForUpdates()
 	local watermark = '--This watermark is used to delete the file if its cached, remove it to make the file persist after vape updates.'
-	for _, folder in {'aerov4', 'aerov4/games', 'aerov4/profiles', 'aerov4/assets', 'aerov4/libraries', 'aerov4/guis'} do
+	for _, folder in {'nyx', 'NYX/games', 'NYX/profiles', 'NYX/assets', 'NYX/libraries', 'NYX/guis'} do
 		if not isfolder(folder) then makefolder(folder) end
 	end
-	local current = isfile('aerov4/profiles/commit.txt') and readfile('aerov4/profiles/commit.txt') or ''
+	local current = isfile('aerov4/profiles/commit.txt') and readfile('NYX/profiles/commit.txt') or ''
 	local ok, res = pcall(function()
 		return game:HttpGet('https://api.github.com/repos/nyxv4/nyx1/commits/main', true)
 	end)
 	local latest = ok and type(res) == 'string' and res:match('"sha"%s*:%s*"(%x+)"')
 	if not latest or #latest ~= 40 then
-		if current == '' then writefile('aerov4/profiles/commit.txt', 'main') end
+		if current == '' then writefile('NYX/profiles/commit.txt', 'main') end
 		return
 	end
 	if latest == current then return end
-	for _, folder in {'aerov4', 'aerov4/games', 'aerov4/guis', 'aerov4/libraries'} do
+	for _, folder in {'NYX', 'NYX/games', 'NYX/guis', '/libraries'} do
 		for _, file in listfiles(folder) do
 			if isfile(file) and readfile(file):sub(1, #watermark) == watermark then
 				pcall(delfile, file)
 			end
 		end
 	end
-	writefile('aerov4/profiles/commit.txt', latest)
-	pcall(writefile, 'aerov4/profiles/latest.txt', latest)
+	writefile('NYX/profiles/commit.txt', latest)
+	pcall(writefile, 'NYX/profiles/latest.txt', latest)
 end
 
 if not shared.VapeDeveloper then
@@ -103,7 +103,7 @@ local function downloadFile(path, func)
 		local success = false
 		for attempt = 1, 3 do
 			local suc, result = pcall(function()
-				return game:HttpGet('https://raw.githubusercontent.com/nyxv4/nyx1/' .. readfile('aerov4/profiles/commit.txt') .. '/' .. select(1, path:gsub('aerov4/', '')), true)
+				return game:HttpGet('https://raw.githubusercontent.com/nyxv4/nyx1/' .. readfile('NYX/profiles/commit.txt') .. '/' .. select(1, path:gsub('aerov4/', '')), true)
 			end)
 			if suc and result ~= '404: Not Found' then
 				res = result
@@ -124,18 +124,18 @@ local function downloadFile(path, func)
 end
 
 local function migrateProfiles()
-	if isfile('aerov4/profiles/migrated_placeid.txt') then return end
+	if isfile('NYX/profiles/migrated_placeid.txt') then return end
 
 	local oldId = tostring(game.GameId)
 	local newId = tostring(game.PlaceId)
 
 	if oldId == newId then
-		pcall(writefile, 'aerov4/profiles/migrated_placeid.txt', 'done')
+		pcall(writefile, 'NYX/profiles/migrated_placeid.txt', 'done')
 		return
 	end
 
 	local suffix = oldId .. '.txt'
-	for _, path in ipairs(listfiles('aerov4/profiles')) do
+	for _, path in ipairs(listfiles('NYX/profiles')) do
 		local name = path:gsub('\\', '/')
 		if name:sub(-#suffix) == suffix then
 			local newPath = name:sub(1, -#suffix - 1) .. newId .. '.txt'
@@ -145,8 +145,8 @@ local function migrateProfiles()
 		end
 	end
 
-	if isfolder('aerov4/profiles/premade') then
-		for _, path in ipairs(listfiles('aerov4/profiles/premade')) do
+	if isfolder('NYX/profiles/premade') then
+		for _, path in ipairs(listfiles('NYX/profiles/premade')) do
 			local name = path:gsub('\\', '/')
 			if name:sub(-#suffix) == suffix then
 				local newPath = name:sub(1, -#suffix - 1) .. newId .. '.txt'
@@ -157,7 +157,7 @@ local function migrateProfiles()
 		end
 	end
 
-	pcall(writefile, 'aerov4/profiles/migrated_placeid.txt', 'done')
+	pcall(writefile, 'NYX/profiles/migrated_placeid.txt', 'done')
 end
 
 pcall(migrateProfiles)
@@ -221,16 +221,16 @@ local function finishLoading()
 	end
 end
 
-if not isfile('aerov4/profiles/gui.txt') then
-	writefile('aerov4/profiles/gui.txt', 'new')
+if not isfile('NYX/profiles/gui.txt') then
+	writefile('NYX/profiles/gui.txt', 'new')
 end
-local gui = readfile('aerov4/profiles/gui.txt')
+local gui = readfile('NYX/profiles/gui.txt')
 
-if not isfolder('aerov4/assets/' .. gui) then
-	makefolder('aerov4/assets/' .. gui)
+if not isfolder('NYX/assets/' .. gui) then
+	makefolder('NYX/assets/' .. gui)
 end
 
-local guiSource = downloadFile('aerov4/guis/' .. gui .. '.lua')
+local guiSource = downloadFile('NYX/guis/' .. gui .. '.lua')
 local guiFunc, guiErr = loadstring(guiSource, 'gui')
 if not guiFunc then
 	local errMsg = tostring(guiErr)
@@ -248,14 +248,14 @@ if not guiFunc then
 		end
 		context = '\n\nContext:\n' .. table.concat(parts, '\n')
 	end
-	error('[aerov4] syntax error in ' .. gui .. '.lua' .. '\n' .. errMsg .. context)
+	error('[NYX] syntax error in ' .. gui .. '.lua' .. '\n' .. errMsg .. context)
 end
 vape = guiFunc()
 if not vape then
-	error('[aerov4] GUI returned nil file may be corrupted try deleting aerov4/guis/' .. gui .. '.lua and reinjecting.')
+	error('[NYX] GUI returned nil file may be corrupted try deleting NYX/guis/' .. gui .. '.lua and reinjecting.')
 end
 if not vape.Load then
-	if delfile then pcall(function() delfile('aerov4/guis/' .. gui .. '.lua') end) end
+	if delfile then pcall(function() delfile('NYX/guis/' .. gui .. '.lua') end) end
 	error('[aerov4] gui file corrupted (missing load) reinject..')
 end
 if not vape.Init and not vape.Load then
@@ -286,11 +286,11 @@ if getgenv().Closet then
 end
 
 if not shared.VapeIndependent then
-	loadstring(downloadFile('aerov4/games/universal.lua'), 'universal')()
+	loadstring(downloadFile('NYX/games/universal.lua'), 'universal')()
 	local gameFileId = (game.GameId == 2619619496) and (game.PlaceId == 6872265039 and 6872265039 or 6872274481) or (game.GameId == 10516888336 and 10516888336 or game.PlaceId)
 
-	if isfile('aerov4/games/' .. gameFileId .. '.lua') then
-		local gameSrc = downloadFile('aerov4/games/' .. gameFileId .. '.lua')
+	if isfile('NYX/games/' .. gameFileId .. '.lua') then
+		local gameSrc = downloadFile('NYX/games/' .. gameFileId .. '.lua')
 		local gameFunc, gameErr = loadstring(gameSrc, tostring(gameFileId))
 		if not gameFunc then
 			local ls = gameSrc:split('\n')
@@ -328,16 +328,16 @@ if not shared.VapeIndependent then
 				end
 				ctx = '\n\naround here:\n' .. table.concat(parts, '\n')
 			end
-			error('[aerov4] syntax error in ' .. gameFileId .. '.lua\n' .. msg .. where .. ctx)
+			error('[NYX] syntax error in ' .. gameFileId .. '.lua\n' .. msg .. where .. ctx)
 		end
 		gameFunc(...)
 	else
 		if not shared.VapeDeveloper then
 			local suc, res = pcall(function()
-				return game:HttpGet('https://raw.githubusercontent.com/nyxv4/nyx1/' .. readfile('aerov4/profiles/commit.txt') .. '/games/' .. gameFileId .. '.lua', true)
+				return game:HttpGet('https://raw.githubusercontent.com/nyxv4/nyx1/' .. readfile('NYX/profiles/commit.txt') .. '/games/' .. gameFileId .. '.lua', true)
 			end)
 			if suc and res and res ~= '404: Not Found' then
-				local path = 'aerov4/games/' .. gameFileId .. '.lua'
+				local path = 'NYX/games/' .. gameFileId .. '.lua'
 				if not isfile(path) then
 					writefile(path, '--This watermark is used to delete the file if its cached, remove it to make the file persist after vape updates.\n' .. res)
 				end
