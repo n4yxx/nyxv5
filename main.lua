@@ -120,6 +120,8 @@ local function downloadFile(path, func)
 		if path:find('%.lua') then
 			res = '--This watermark is used to delete the file if its cached, remove it to make the file persist after vape updates.\n' .. res
 		end
+		local dir = path:match('^(.*)/[^/]+$')
+		if dir and not isfolder(dir) then makefolder(dir) end
 		writefile(path, res)
 	end
 	return (func or readfile)(path)

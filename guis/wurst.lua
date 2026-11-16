@@ -73,6 +73,8 @@ local function downloadFile(path, func)
 		local suc, res = pcall(function() return game:HttpGet('https://raw.githubusercontent.com/nyxv4/nyx1/'..((isfile('newvape/profiles/commit.txt') and readfile('newvape/profiles/commit.txt')) or (isfile('aerov4/profiles/commit.txt') and readfile('aerov4/profiles/commit.txt')) or 'main')..'/'..select(1, path:gsub('newvape/', '')), true) end)
 		if not suc or res == '404: Not Found' then error(res) end
 		if path:find('.lua') then res = '--This watermark is used to delete the file if its cached, remove it to make the file persist after vape updates.\n'..res end
+		local dir = path:match('^(.*)/[^/]+$')
+		if dir and not isfolder(dir) then makefolder(dir) end
 		writefile(path, res)
 	end
 	return (func or readfile)(path)
