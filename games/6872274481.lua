@@ -9484,6 +9484,7 @@ run(function()
 		end
 
 		local sword = (GrandLimit and GrandLimit.Enabled) and store.hand or store.tools.sword
+		if not sword or not sword.tool then sword = store.hand end
 		if not sword or not sword.tool then return false end
 
 		if GrandLimit and GrandLimit.Enabled then
@@ -9500,6 +9501,17 @@ run(function()
 		end
 
 		return sword, meta
+	end
+
+	local function grandWeaponInstance(sword)
+		local weaponInst = sword.tool
+		pcall(function()
+			local inv = replicatedStorage:FindFirstChild('Inventories')
+			local mine = inv and inv:FindFirstChild(lplr.Name)
+			local w = mine and mine:FindFirstChild(sword.tool.Name)
+			if w then weaponInst = w end
+		end)
+		return weaponInst
 	end
 
 	local function grandFireAttack(weaponInst, entityInstance, selfPos, targetPos)
@@ -9521,7 +9533,6 @@ run(function()
 			AttackRemote:FireServer({
 				weapon = weaponInst,
 				chargedAttack = {chargeRatio = 0},
-				lastSwingServerTimeDelta = 0.5,
 				entityInstance = entityInstance,
 				validate = {
 					raycast = {
@@ -9613,7 +9624,7 @@ run(function()
 						end
 						if triggered then
 							GrandAttacking = false
-							store.KillauraTarget = nil
+							store.GrandKillauraTarget = nil
 							for _, box in GrandBoxes do box.Adornee = nil end
 							for _, part in GrandParticles do part.Parent = nil end
 							task.wait(0.3)
@@ -9623,10 +9634,11 @@ run(function()
 
 					local sword, meta = grandGetAttackData()
 					GrandAttacking = false
-					store.KillauraTarget = nil
+					store.GrandKillauraTarget = nil
 
 					local attacked = {}
 					if sword then
+						local avoidTarget = (Killaura and Killaura.Enabled) and store.KillauraTarget or nil
 						local plrs = entitylib.AllPosition({
 							Range = GrandSwingRange.Value,
 							Wallcheck = GrandTargets.Walls.Enabled or nil,
@@ -9636,6 +9648,18 @@ run(function()
 							Limit = GrandMaxTargets.Value,
 							Sort = sortmethods[GrandSort.Value]
 						})
+
+						if avoidTarget and #plrs > 1 then
+							local others = {}
+							for _, ent in plrs do
+								if ent ~= avoidTarget then
+									table.insert(others, ent)
+								end
+							end
+							if #others > 0 then
+								plrs = others
+							end
+						end
 
 						if #plrs > 0 then
 							switchItem(sword.tool, 0)
@@ -9656,7 +9680,7 @@ run(function()
 
 								if not GrandAttacking then
 									GrandAttacking = true
-									store.KillauraTarget = v
+									store.GrandKillauraTarget = v
 
 									if not GrandSwing.Enabled and not GrandLegit.Enabled and not GrandAnimActive then
 										local effectInterval = math.max(GrandChargeTime.Value, 0.11)
@@ -9674,7 +9698,7 @@ run(function()
 								end
 
 								if delta.Magnitude > GrandAttackRange.Value then continue end
-								if delta.Magnitude < 14.4 and (tick() - GrandSwingCooldown) < math.max(GrandChargeTime.Value, 0.02) then continue end
+								if (tick() - GrandSwingCooldown) < math.max(GrandChargeTime.Value, 0.296) then continue end
 
 								local tchar = v.Character
 								local actualRoot = tchar and tchar.PrimaryPart
@@ -9706,7 +9730,7 @@ run(function()
 									store.attackReach = (delta.Magnitude * 100) // 1 / 100
 									store.attackReachUpdate = tick() + 1
 
-									grandFireAttack(sword.tool, tchar, selfpos, actualRoot.Position)
+									grandFireAttack(grandWeaponInstance(sword), tchar, selfpos, actualRoot.Position)
 								end
 							end
 						end
@@ -9735,7 +9759,7 @@ run(function()
 					runService.Heartbeat:Wait()
 				until not GrandKillaura.Enabled
 			else
-				store.KillauraTarget = nil
+				store.GrandKillauraTarget = nil
 				for _, box in GrandBoxes do box.Adornee = nil end
 				for _, part in GrandParticles do part.Parent = nil end
 				if inputService.TouchEnabled then
