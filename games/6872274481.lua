@@ -692,10 +692,19 @@ local function liveHandTool()
 	return check and check.Value or nil
 end
 
+local function projectileToolName(name)
+	if not name then return false end
+	local n = name:lower()
+	return n:find('bow') ~= nil or n:find('headhunter') ~= nil or n:find('snowball') ~= nil
+		or n:find('fireball') ~= nil or n:find('gloop') ~= nil or n:find('glue') ~= nil
+		or n:find('chakram') ~= nil or n:find('slingshot') ~= nil
+end
+
 local function isProjectileTool(tool)
 	if not tool then return false end
 	local meta = bedwars.ItemMeta and bedwars.ItemMeta[tool.Name]
-	return (meta and meta.projectileSource) and true or false
+	if meta and meta.projectileSource then return true end
+	return projectileToolName(tool.Name)
 end
 
 local handDesyncAt = 0
@@ -723,6 +732,24 @@ local function syncHandDesync()
 		end)
 		store._equipPending = false
 	end)
+end
+
+local function netPing()
+	local p = store.ping and store.ping.total
+	if type(p) == 'number' and p > 0 then
+		return math.clamp(p, 0.01, 1)
+	end
+	local ok, v = pcall(function() return lplr:GetNetworkPing() end)
+	if ok and type(v) == 'number' and v > 0 then
+		return math.clamp(v, 0.01, 1)
+	end
+	return 0.02
+end
+
+local function wallBetween(ent)
+	local root = entitylib.character and entitylib.character.RootPart
+	if not root or not ent or not ent.RootPart then return false end
+	return entitylib.Wallcheck(root.Position, ent.RootPart.Position, nil, ent) ~= nil
 end
 
 local function waitForChildOfType(obj, name, timeout, prop)
@@ -3615,20 +3642,6 @@ run(function()
 						end
 					end
 
-					if ShakeToggle and ShakeToggle.Enabled and ShakeAmount.Value > 0 then
-						shakeTime = shakeTime + dt
-						local camCF = gameCamera.CFrame
-						local dist = (aimPosition - camCF.Position).Magnitude
-						local intensity = ShakeAmount.Value * 0.0035 * math.max(dist, 1)
-						local driftX = math.noise(shakeTime * 0.8, 0, shakeSeed) * 2
-						local driftY = math.noise(0, shakeTime * 0.7, shakeSeed) * 2
-						local microX = math.noise(shakeTime * 9.5, shakeSeed, 0) * 2
-						local microY = math.noise(shakeSeed, shakeTime * 10.7, 0) * 2
-						local sx = (driftX * 0.7 + microX * 0.3) * intensity
-						local sy = (driftY * 0.55 + microY * 0.25) * intensity
-						aimPosition = aimPosition + camCF.RightVector * sx + camCF.UpVector * sy
-					end
-
 					if ent ~= aimTarget then
 						aimTarget = ent
 						aimReactAt = tick() + 0.04 + rng:NextNumber() * 0.05
@@ -3638,17 +3651,26 @@ run(function()
 					local aimDelta = aimPosition - camCF.Position
 					if aimDelta.Magnitude < 0.01 then return end
 					local angle = math.acos(math.clamp(camCF.LookVector:Dot(aimDelta.Unit), -1, 1))
-					if angle < math.rad(0.35) then return end
-
-					local targetCFrame = CFrame.lookAt(camCF.Position, aimPosition)
-					local smoothVal = (SmoothnessToggle and SmoothnessToggle.Enabled and Smoothness) and Smoothness.Value or nil
-					local alpha = getAimAlpha(AimSpeed.Value, smoothVal, dt)
-					local ease = 0.72 + 0.28 * math.min(angle / math.rad(22), 1)
-					if tick() < aimReactAt then
-						ease = ease * 0.25
+					if angle >= math.rad(0.35) then
+						local targetCFrame = CFrame.lookAt(camCF.Position, aimPosition)
+						local smoothVal = (SmoothnessToggle and SmoothnessToggle.Enabled and Smoothness) and Smoothness.Value or nil
+						local alpha = getAimAlpha(AimSpeed.Value, smoothVal, dt)
+						local ease = 0.72 + 0.28 * math.min(angle / math.rad(22), 1)
+						if tick() < aimReactAt then
+							ease = ease * 0.25
+						end
+						local step = math.min(angle * alpha * ease, math.rad(600) * dt)
+						gameCamera.CFrame = camCF:Lerp(targetCFrame, step / angle)
 					end
-					local step = math.min(angle * alpha * ease, math.rad(600) * dt)
-					gameCamera.CFrame = camCF:Lerp(targetCFrame, step / angle)
+
+					if ShakeToggle and ShakeToggle.Enabled and ShakeAmount and ShakeAmount.Value > 0 then
+						shakeTime = shakeTime + dt
+						local amp = math.rad(ShakeAmount.Value * 0.5)
+						local yaw = math.noise(shakeTime * 2.4, shakeSeed, 0) * amp
+						local pitch = math.noise(shakeSeed, shakeTime * 2.1, 0) * amp
+						local roll = math.noise(shakeTime * 1.3, shakeSeed * 0.7, 0) * amp * 0.4
+						gameCamera.CFrame = gameCamera.CFrame * CFrame.Angles(pitch, yaw, roll)
+					end
 				end))
 			else
 				lockedTarget = nil
@@ -7439,8 +7461,7 @@ run(function()
 		if not tool or not tool.Parent then return false end
 		if store.hand and store.hand.tool == tool and not store._equipPending then return true end
 		pcall(switchItem, tool, 0.0475)
-		local ping = (store.ping and store.ping.total) or 0.1
-		local deadline = tick() + math.clamp(ping * 1.2 + 0.06, 0.18, 0.32)
+		local deadline = tick() + math.clamp(netPing() * 1.5 + 0.08, 0.2, 0.55)
 		while tick() < deadline do
 			if store.hand and store.hand.tool == tool then return true end
 			if not tool.Parent or not lplr.Character then return false end
@@ -7498,9 +7519,7 @@ run(function()
 	local function getFHPing()
 		if tick() - _fhPingClock < 1 then return _fhPing end
 		_fhPingClock = tick()
-		-- Use store.ping.total for direct ping measurement (more accurate than game stats)
-		local val = (store.ping and store.ping.total) or 0
-		_fhPing = math.clamp(val, 0.02, 1)
+		_fhPing = netPing()
 		return _fhPing
 	end
 
@@ -7695,6 +7714,12 @@ run(function()
 
 		FastHitPending = true
 		task.spawn(function()
+			if switched then
+				task.delay(0.06, function()
+					fhRestoreSword(item.tool)
+					fhBusy = false
+				end)
+			end
 			local ok, res = pcall(function()
 				return projectileRemote:InvokeServer(
 					item.tool, ammo, projectile, shootPos, selfPos,
@@ -7711,10 +7736,6 @@ run(function()
 					pcall(function() bedwars.SoundManager:playSound(sound) end)
 				end
 				lastProjectileTime = workspace:GetServerTimeNow()
-			end
-			if switched then
-				fhRestoreSword(item.tool)
-				fhBusy = false
 			end
 		end)
 
@@ -8109,20 +8130,20 @@ run(function()
 
 	local function resolveTarget()
 		local v = store.KillauraTarget
-		if aliveTarget(v) and withinAngle(v) and inReach(v) then
+		if aliveTarget(v) and withinAngle(v) and inReach(v) and not (Targets.Walls.Enabled and wallBetween(v)) then
 			_graceTarget = v
 			_graceUntil = tick() + 0.4
 			return v
 		end
 		if _graceTarget and tick() < _graceUntil then
 			local g = _graceTarget
-			if aliveTarget(g) and inReach(g) then
+			if aliveTarget(g) and withinAngle(g) and inReach(g) and not (Targets.Walls.Enabled and wallBetween(g)) then
 				return g
 			end
 		end
 		local now = tick()
 		if (now - _fastAcqTime) < 0.03 and _fastAcqRes then
-			if not (aliveTarget(_fastAcqRes) and withinAngle(_fastAcqRes) and inReach(_fastAcqRes)) then return nil end
+			if not (aliveTarget(_fastAcqRes) and withinAngle(_fastAcqRes) and inReach(_fastAcqRes) and not (Targets.Walls.Enabled and wallBetween(_fastAcqRes))) then return nil end
 			return _fastAcqRes
 		end
 		_fastAcqTime = now
@@ -8908,16 +8929,11 @@ run(function()
 	local GRAND_HIT_PERIOD = 0.29583333333333334
 
 	function GrandFire.projectileInHand()
-		if isProjectileTool(liveHandTool()) then return true end
+		local live = liveHandTool()
+		if live then return isProjectileTool(live) end
 		local hand = store.hand
 		if not hand or not hand.tool then return false end
 		if hand.toolType == 'bow' then return true end
-		local name = hand.tool.Name:lower()
-		if name:find('bow') or name:find('headhunter') or name:find('snowball')
-			or name:find('fireball') or name:find('gloop') or name:find('glue')
-			or name:find('chakram') or name:find('slingshot') then
-			return true
-		end
 		local meta = bedwars.ItemMeta and bedwars.ItemMeta[hand.tool.Name]
 		return (meta and meta.projectileSource) and true or false
 	end
@@ -9043,7 +9059,8 @@ run(function()
 		if not root or not v or not v.RootPart then return false end
 		local flat = (v.RootPart.Position - root.Position) * Vector3.new(1, 0, 1)
 		if flat.Magnitude <= 1.0 then return true end
-		local flatLV = root.CFrame.LookVector * Vector3.new(1, 0, 1)
+		local camLV = gameCamera and gameCamera.CFrame.LookVector * Vector3.new(1, 0, 1)
+		local flatLV = (camLV and camLV.Magnitude > 0.001) and camLV or root.CFrame.LookVector * Vector3.new(1, 0, 1)
 		local facing = flatLV.Magnitude > 0.001 and flatLV.Unit or root.CFrame.RightVector
 		return math.acos(math.clamp(facing:Dot(flat.Unit), -1, 1)) <= math.rad(GrandAngle.Value) / 2
 	end
@@ -9052,6 +9069,7 @@ run(function()
 		local avoid = (Killaura and Killaura.Enabled) and store.KillauraTarget or nil
 		local function usable(v)
 			return GrandFire.aliveTarget(v) and v ~= avoid and GrandFire.withinAngle(v) and GrandFire.inReach(v)
+				and not (GrandTargets.Walls.Enabled and wallBetween(v))
 		end
 
 		local v = store.GrandKillauraTarget
@@ -9062,7 +9080,7 @@ run(function()
 		end
 
 		local g = GrandFire.GraceTarget
-		if g and tick() < GrandFire.GraceUntil and GrandFire.aliveTarget(g) and GrandFire.inReach(g) and g ~= avoid then
+		if g and tick() < GrandFire.GraceUntil and GrandFire.aliveTarget(g) and GrandFire.withinAngle(g) and GrandFire.inReach(g) and g ~= avoid and not (GrandTargets.Walls.Enabled and wallBetween(g)) then
 			return g
 		end
 
@@ -9102,9 +9120,12 @@ run(function()
 
 		local sword, meta = grandGetAttackData()
 		if not sword or not meta then return false end
-		if store.hand and store.hand.tool and store.hand.toolType ~= 'sword' and not isMeleeWeapon(store.hand.tool.Name) then return false end
 		local liveTool = liveHandTool()
-		if liveTool and liveTool ~= sword.tool and isProjectileTool(liveTool) then return false end
+		if liveTool then
+			if liveTool ~= sword.tool and isProjectileTool(liveTool) then return false end
+		elseif store.hand and store.hand.tool and store.hand.toolType ~= 'sword' and not isMeleeWeapon(store.hand.tool.Name) then
+			return false
+		end
 
 		local tchar = v.Character
 		if not tchar or not tchar.PrimaryPart then return false end
@@ -9313,7 +9334,8 @@ run(function()
 						local plrs = GrandFire.ScanCache
 						if #plrs > 0 then
 							local selfpos = entitylib.character.RootPart.Position
-							local flatLV = entitylib.character.RootPart.CFrame.LookVector * Vector3.new(1, 0, 1)
+							local camLV = gameCamera and gameCamera.CFrame.LookVector * Vector3.new(1, 0, 1)
+							local flatLV = (camLV and camLV.Magnitude > 0.001) and camLV or entitylib.character.RootPart.CFrame.LookVector * Vector3.new(1, 0, 1)
 							local localfacing = flatLV.Magnitude > 0.001 and flatLV.Unit or entitylib.character.RootPart.CFrame.RightVector
 							local maxAngle = math.rad(GrandAngle.Value) / 2
 
@@ -9342,16 +9364,17 @@ run(function()
 								end
 							end
 
-							GrandAttacking = chosen ~= nil
+							local liveProj = isProjectileTool(liveHandTool())
+							GrandAttacking = chosen ~= nil and not liveProj
 							store.GrandKillauraTarget = chosen
 
 							if hasValidSwing then
-								if not fhBusy and not regentBusy and store.hand and store.hand.tool ~= sword.tool and not isProjectileTool(liveHandTool()) and (tick() - (store._kaSwitch or 0)) > 0.25 and tick() >= GrandFire.ItemUntil then
+								if not fhBusy and not regentBusy and store.hand and store.hand.tool ~= sword.tool and not liveProj and (tick() - (store._kaSwitch or 0)) > 0.25 and tick() >= GrandFire.ItemUntil then
 									store._kaSwitch = tick()
 									switchItem(sword.tool, 0)
 								end
 
-								if not GrandSwing.Enabled and not GrandLegit.Enabled and not GrandAnimActive and not sword.tool.Name:find('summoner_claw') and tick() >= GrandFire.ItemUntil and (tick() - GrandLastAnimTime) >= math.max(GrandChargeTime.Value, 0.296) then
+								if not GrandSwing.Enabled and not GrandLegit.Enabled and not GrandAnimActive and not liveProj and not sword.tool.Name:find('summoner_claw') and tick() >= GrandFire.ItemUntil and (tick() - GrandLastAnimTime) >= math.max(GrandChargeTime.Value, 0.296) then
 									GrandLastAnimTime = tick()
 									if isOnTinker() then
 										playTinkerSwing()
