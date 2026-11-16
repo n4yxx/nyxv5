@@ -6694,6 +6694,113 @@ run(function()
 		return Spacing, Scale, Gap, math.max(Speed - SwordTiming.CooldownCorrection, 0), Stock
 	end
 
+	-- Same attack budget catvape derives from the game's own SwordHit rate limit.
+	-- Sending faster than this only produces hits the server throws away (ghosts).
+	SwordTiming.Budget = SwordTiming.HitFloor
+	SwordTiming.GhostDelay = 0
+	SwordTiming.GhostHold = 0
+	SwordTiming.GhostSeen = false
+	SwordTiming.Pending = {}
+
+	function SwordTiming.refreshBudget()
+		local ok, rate = pcall(function()
+			return bedwars.Handler:Get('SwordHit'):GetRateLimit()
+		end)
+		if ok and type(rate) == 'number' and rate > 0 then
+			SwordTiming.Budget = math.clamp(60 / rate, 0.24, 0.6)
+		end
+	end
+
+	function SwordTiming.furyScale()
+		local now = tick()
+		if SwordTiming._furyAt and (now - SwordTiming._furyAt) < 0.25 then
+			return SwordTiming._fury or 1
+		end
+		SwordTiming._furyAt = now
+		local scale = 1
+		local char = lplr.Character
+		local attr = char and char:GetAttribute('StatusEffect_fury_potion')
+		local active = attr ~= nil and attr ~= false and attr ~= 0
+		if not active then
+			local ok, res = pcall(function()
+				return bedwars.StatusEffectUtil:isActive(char, 'fury_potion')
+			end)
+			active = ok and res == true
+		end
+		if active then
+			local okM, mult = pcall(function()
+				return bedwars.BlackMarketeerBalance.FURY_POTION_ATTACK_SPEED_MULTIPLIER
+			end)
+			if okM and type(mult) == 'number' and mult > 1 and mult < 2 then
+				scale = 1 - (mult - 1)
+			else
+				scale = 0.8
+			end
+		end
+		SwordTiming._fury = scale
+		return scale
+	end
+
+	function SwordTiming.noteSend(target)
+		local q = SwordTiming.Pending
+		if #q >= 10 then table.remove(q, 1) end
+		table.insert(q, {target = target, clock = tick()})
+	end
+
+	function SwordTiming.noteDamage(target)
+		SwordTiming.GhostSeen = true
+		local q = SwordTiming.Pending
+		for i = #q, 1, -1 do
+			if q[i].target == target then
+				table.remove(q, i)
+				return
+			end
+		end
+	end
+
+	function SwordTiming.sweep()
+		local q = SwordTiming.Pending
+		if not SwordTiming.GhostSeen then
+			if q[1] then table.clear(q) end
+			return
+		end
+		local now = tick()
+		local limit = 0.5 + netPing() * 1.5
+		for i = #q, 1, -1 do
+			if (now - q[i].clock) > limit then
+				table.remove(q, i)
+				SwordTiming.GhostHold = now + 3
+				SwordTiming.GhostDelay = math.min(SwordTiming.GhostDelay + 0.002, 0.02)
+			end
+		end
+		if SwordTiming.GhostDelay > 0 and now > SwordTiming.GhostHold then
+			SwordTiming.GhostDelay = math.max(SwordTiming.GhostDelay - 0.001, 0)
+		end
+	end
+
+	function SwordTiming.resetGhost()
+		table.clear(SwordTiming.Pending)
+		SwordTiming.GhostDelay = 0
+		SwordTiming.GhostHold = 0
+	end
+
+	-- catvape's guard: never send sooner than the sword's own attack speed after ANY
+	-- registered attack (ours or the game's), or the server drops the packet.
+	function SwordTiming.readyForHit(meta)
+		local last = bedwars.SwordController and bedwars.SwordController.lastAttack
+		if type(last) ~= 'number' or last <= 0 then return true end
+		local delta = workspace:GetServerTimeNow() - last
+		if delta < 0 or delta > 1 then return true end
+		local speed = ((meta and meta.sword and meta.sword.attackSpeed) or 0.3) * SwordTiming.furyScale()
+		return delta >= math.max(speed - SwordTiming.CooldownCorrection, 0)
+	end
+
+	vape:Clean(vapeEvents.EntityDamageEvent.Event:Connect(function(damageTable)
+		if damageTable.fromEntity ~= lplr.Character or damageTable.damageType ~= 0 then return end
+		if typeof(damageTable.entityInstance) ~= 'Instance' then return end
+		SwordTiming.noteDamage(damageTable.entityInstance)
+	end))
+
 	-- 240Hz Quantized Clock
 	local preciseRemainder = 0
 	local preciseTimestamp = tick()
@@ -6735,7 +6842,8 @@ run(function()
 		local mode = (HitregMode and HitregMode.Value) or 'Stealth Mode'
 		local dynDelay = (DynamicDelaySlider and DynamicDelaySlider.Value) or 100
 		local Speed = meta.sword and meta.sword.attackSpeed or 0.3
-		local Budget = 0
+		local fury = SwordTiming.furyScale()
+		local Budget = (SwordTiming.Budget or SwordTiming.HitFloor) * fury
 		local Hits = 35
 		
 		-- Advanced Mode: 48.55, Stealth Mode: 50, Dynamic: slider value
@@ -6750,7 +6858,7 @@ run(function()
 		
 		-- This decouples hit registration from animation speed
 		local Spacing = SwordTiming.Calculate(Speed, 'Dynamic', effectiveDelay, Budget, Hits)
-		return quantize240(Spacing)
+		return quantize240(Spacing + (SwordTiming.GhostDelay or 0))
 	end
 
 	local function markAttackResult(success)
@@ -6804,8 +6912,10 @@ run(function()
 		local delta = (targetPos - selfPos).Magnitude
 		if delta < 0.01 then return false end
 
+		local weaponMeta = weapon and bedwars.ItemMeta[weapon.Name]
+		local reach = ((weaponMeta and weaponMeta.sword and weaponMeta.sword.attackRange) or SERVER_REACH) - 0.001
 		local dir = CFrame.lookAt(selfPos, targetPos).LookVector
-		local pos = selfPos + dir * math.max(delta - 14.399, 0)
+		local pos = selfPos + dir * math.max(delta - reach, 0)
 
 		AttackRemote:FireServer({
 			weapon = weapon,
@@ -6963,32 +7073,30 @@ run(function()
 
 	-- Play First-Person & Viewmodel Swing Animation (Supports All Hephaestus Chainsaw Tiers & Standard Swords)
 	local function triggerFirstPersonSwing(meta)
+		-- 1. Fire ClientSyncEvent SwordSwing
 		pcall(function()
-			local tool = store.hand and store.hand.tool
-			local toolName = tool and tool.Name:lower() or ""
-
-			-- 1. Fire ClientSyncEvent SwordSwing
 			local syncEvents = bedwars.ClientSyncEvents or (bedwars.Client and bedwars.Client:GetNamespace('Default'))
 			if syncEvents and syncEvents:Get('SwordSwing') then
-				syncEvents:Get('SwordSwing'):Fire({
-					player = lplr
-				})
-			end
-
-			-- 2. Play Sword Effect if meta is available (pass false to prevent forcing weapon-speed animation reset)
-			if bedwars.SwordController and meta then
-				bedwars.SwordController:playSwordEffect(meta, false)
-			end
-
-			-- 3. Force Viewmodel & Arm Swing for Wood/Base Chainsaw & All Tiers
-			if bedwars.ViewmodelController and bedwars.ViewmodelController.playAnimation then
-				if toolName:find('chainsaw') or toolName:find('tinker') or toolName:find('wood') then
-					bedwars.ViewmodelController:playAnimation(bedwars.AnimationType.SWORD_SWING or bedwars.AnimationType.FP_USE_ITEM or 15)
-				elseif bedwars.AnimationType and bedwars.AnimationType.SWORD_SWING then
-					bedwars.ViewmodelController:playAnimation(bedwars.AnimationType.SWORD_SWING)
-				end
+				syncEvents:Get('SwordSwing'):Fire({player = lplr})
 			end
 		end)
+
+		-- 2. Play Sword Effect (same call catvape makes; false keeps the weapon-speed reset off)
+		if bedwars.SwordController and meta then
+			pcall(function()
+				bedwars.SwordController:playSwordEffect(meta, false)
+			end)
+		end
+
+		-- 3. Force the viewmodel swing for every sword, not just chainsaws. While a
+		-- consumable or buff is active the game can skip its own swing, so drive the
+		-- viewmodel directly on every swing.
+		if bedwars.ViewmodelController and bedwars.ViewmodelController.playAnimation then
+			pcall(function()
+				local animType = (bedwars.AnimationType and (bedwars.AnimationType.SWORD_SWING or bedwars.AnimationType.FP_USE_ITEM)) or 15
+				bedwars.ViewmodelController:playAnimation(animType)
+			end)
+		end
 	end
 
 	-- REAL-TIME USE KITS ENGINE
@@ -8086,6 +8194,8 @@ run(function()
 			return false
 		end
 
+		if not SwordTiming.readyForHit(meta) then return false end
+
 		if not FireAttackRemote(weaponInst, tchar, selfPos, targetPos) then
 			markAttackResult(false)
 			return false
@@ -8101,6 +8211,7 @@ run(function()
 		markAttackResult(true)
 
 		kaLastSend = srvNow
+		SwordTiming.noteSend(tchar)
 		if kaLastSrv > 0 then
 			kaLastSrv = kaLastSrv + kaPeriod
 			if kaLastSrv < srvNow then
@@ -8120,6 +8231,8 @@ run(function()
 	local function startKillauraFireLoop()
 		if killauraFireLoop then return end
 
+		SwordTiming.refreshBudget()
+		SwordTiming.resetGhost()
 		kaPeriod = HIT_PERIOD
 		animPeriod = NORMAL_SWORD_SWING_SPEED
 		kaNextFire = 0
@@ -8133,13 +8246,14 @@ run(function()
 				local sword, meta = getAttackData()
 				if sword and meta then
 					kaPeriod = getAttackDelay(meta)
-					animPeriod = NORMAL_SWORD_SWING_SPEED
+					animPeriod = NORMAL_SWORD_SWING_SPEED * SwordTiming.furyScale()
 				else
 					kaPeriod = HIT_PERIOD
 					animPeriod = NORMAL_SWORD_SWING_SPEED
 				end
 
 				updatePreciseClock()
+				SwordTiming.sweep()
 
 				local heartbeatDt = 1 / 60
 				local target = kaPeriod - math.min(heartbeatDt * 0.5, kaPeriod * 0.06)
@@ -8155,6 +8269,7 @@ run(function()
 			pcall(task.cancel, killauraFireLoop)
 			killauraFireLoop = nil
 		end
+		SwordTiming.resetGhost()
 		_graceTarget = nil
 		_graceUntil = 0
 		_fastAcqTime = 0
@@ -8896,8 +9011,10 @@ run(function()
 		local delta = (targetPos - selfPos).Magnitude
 		if delta < 0.01 then return false end
 
+		local weaponMeta = bedwars.ItemMeta[weaponInst.Name]
+		local reach = ((weaponMeta and weaponMeta.sword and weaponMeta.sword.attackRange) or GRAND_SERVER_REACH) - 0.001
 		local dir = CFrame.lookAt(selfPos, targetPos).LookVector
-		local pos = selfPos + dir * math.max(delta - GRAND_SERVER_REACH, 0)
+		local pos = selfPos + dir * math.max(delta - reach, 0)
 
 		local ok = pcall(function()
 			AttackRemote:FireServer({
@@ -9009,6 +9126,8 @@ run(function()
 			return false
 		end
 
+		if not SwordTiming.readyForHit(meta) then return false end
+
 		if not grandFireAttack(grandWeaponInstance(sword), tchar, selfPos, targetPos) then
 			return false
 		end
@@ -9020,6 +9139,7 @@ run(function()
 		end
 		store.attackReach = (dist * 100) // 1 / 100
 		store.attackReachUpdate = tick() + 1
+		SwordTiming.noteSend(tchar)
 		if bedwars.SwordController then
 			bedwars.SwordController.lastAttack = srvNow
 		end
@@ -9030,6 +9150,8 @@ run(function()
 		if GrandFire.Loop then return end
 
 		GrandFire.Period = GRAND_HIT_PERIOD
+		SwordTiming.refreshBudget()
+		SwordTiming.resetGhost()
 		GrandLastSrv = workspace:GetServerTimeNow() - GrandFire.Period
 		GrandFire.GraceTarget, GrandFire.GraceUntil = nil, 0
 		GrandFire.AcqTime, GrandFire.AcqRes = 0, nil
@@ -9041,6 +9163,7 @@ run(function()
 			while GrandKillaura and GrandKillaura.Enabled do
 				runService.Heartbeat:Wait()
 				GrandFire.watchHand()
+				SwordTiming.sweep()
 
 				local meta = GrandFire.swordMeta()
 				if meta then
@@ -9067,6 +9190,7 @@ run(function()
 		GrandFire.LastSword = nil
 		GrandFire.HoldTarget, GrandFire.HoldUntil = nil, 0
 		GrandLastSrv = 0
+		SwordTiming.resetGhost()
 	end
 
 	GrandKillaura = vape.Categories.Blatant:CreateModule({
@@ -9248,7 +9372,7 @@ run(function()
 									switchItem(sword.tool, 0)
 								end
 
-								if not GrandSwing.Enabled and not GrandLegit.Enabled and not GrandAnimActive and not liveProj and not sword.tool.Name:find('summoner_claw') and tick() >= GrandFire.ItemUntil and (tick() - GrandLastAnimTime) >= math.max(GrandChargeTime.Value, 0.296) then
+								if not GrandSwing.Enabled and not GrandLegit.Enabled and not GrandAnimActive and not liveProj and not sword.tool.Name:find('summoner_claw') and tick() >= GrandFire.ItemUntil and (tick() - GrandLastAnimTime) >= math.max(GrandChargeTime.Value, 0.296) * SwordTiming.furyScale() then
 									GrandLastAnimTime = tick()
 									if isOnTinker() then
 										playTinkerSwing()
