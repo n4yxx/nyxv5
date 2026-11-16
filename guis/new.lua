@@ -1,4 +1,4 @@
---NYXBUILD:nyxv4
+--NYXBUILD:nyx5
 local mainapi = {
 	Categories = {},
 	GUIColor = {
@@ -1448,9 +1448,7 @@ end
 
 local customAssets = {
 	['NYX/assets/new/guivape.png'] = true,
-	['NYX/assets/new/guiv4.png'] = true,
 	['NYX/assets/new/textvape.png'] = true,
-	['NYX/assets/new/textv4.png'] = true,
 	['NYX/assets/new/vape.png'] = true,
 	['NYX/assets/new/kiticon.png'] = true,
 	['NYX/assets/new/legiticon.png'] = true
@@ -3971,27 +3969,6 @@ function mainapi:CreateGUI()
 		logoText.TextXAlignment = Enum.TextXAlignment.Left
 		logoText.TextColor3 = Color3.new(1, 1, 1)
 		logoText.Parent = window
-	end
-	local logov4 = Instance.new('ImageLabel')
-	logov4.Name = 'V4Logo'
-	logov4.Size = UDim2.fromOffset(31, 18)
-	logov4.Position = UDim2.new(1, 0, 0, 1)
-	logov4.BackgroundTransparency = 1
-	logov4.Image = getBrandAsset('NYX/assets/new/guiv4.png')
-	logov4.ImageColor3 = Color3.new(1, 1, 1)
-	logov4.Parent = logo
-	if logov4.Image == '' then
-		logov4.Visible = false
-		local v4Text = Instance.new('TextLabel')
-		v4Text.Name = 'V4LogoText'
-		v4Text.Size = UDim2.fromOffset(31, 18)
-		v4Text.Position = UDim2.fromOffset(78, 9)
-		v4Text.BackgroundTransparency = 1
-		v4Text.FontFace = Font.fromEnum(Enum.Font.GothamBlack)
-		v4Text.Text = 'V4'
-		v4Text.TextSize = 15
-		v4Text.TextColor3 = Color3.fromRGB(201, 164, 22)
-		v4Text.Parent = window
 	end
 	local children = Instance.new('Frame')
 	children.Name = 'Children'
@@ -9918,22 +9895,12 @@ local textguishadow = textgui:CreateToggle({
 		mainapi:UpdateTextGUI()
 	end
 })
-local textguigradientv4
 local textguigradient = textgui:CreateToggle({
 	Name = 'Gradient',
 	Tooltip = 'Renders a gradient',
-	Function = function(callback)
-		textguigradientv4.Object.Visible = callback
-		mainapi:UpdateTextGUI()
-	end
-})
-textguigradientv4 = textgui:CreateToggle({
-	Name = 'V4 Gradient',
 	Function = function()
 		mainapi:UpdateTextGUI()
-	end,
-	Darker = true,
-	Visible = false
+	end
 })
 local textguianimations = textgui:CreateToggle({
 	Name = 'Animations',
@@ -10469,15 +10436,6 @@ mainapi:Clean(textgui.Children:GetPropertyChangedSignal('AbsolutePosition'):Conn
 	end
 end))
 
-local VapeLogoV4 = Instance.new('ImageLabel')
-VapeLogoV4.Name = 'Logo2'
-VapeLogoV4.Size = UDim2.fromOffset(33, 18)
-VapeLogoV4.Position = UDim2.new(1, 4, 0, 2)
-VapeLogoV4.BackgroundColor3 = Color3.new()
-VapeLogoV4.BackgroundTransparency = 1
-VapeLogoV4.BorderSizePixel = 0
-VapeLogoV4.Image = getBrandAsset('NYX/assets/new/textv4.png')
-VapeLogoV4.Parent = VapeLogo
 local VapeLogoShadow = VapeLogo:Clone()
 VapeLogoShadow.Position = UDim2.fromOffset(1, 1)
 VapeLogoShadow.ZIndex = 0
@@ -10485,15 +10443,9 @@ VapeLogoShadow.Visible = true
 VapeLogoShadow.ImageColor3 = Color3.new()
 VapeLogoShadow.ImageTransparency = 0.65
 VapeLogoShadow.Parent = VapeLogo
-VapeLogoShadow.Logo2.ZIndex = 0
-VapeLogoShadow.Logo2.ImageColor3 = Color3.new()
-VapeLogoShadow.Logo2.ImageTransparency = 0.65
 local VapeLogoGradient = Instance.new('UIGradient')
 VapeLogoGradient.Rotation = 90
 VapeLogoGradient.Parent = VapeLogo
-local VapeLogoGradient2 = Instance.new('UIGradient')
-VapeLogoGradient2.Rotation = 90
-VapeLogoGradient2.Parent = VapeLogoV4
 local VapeLabelCustom = Instance.new('TextLabel')
 VapeLabelCustom.Position = UDim2.fromOffset(5, 2)
 VapeLabelCustom.BackgroundTransparency = 1
@@ -10940,10 +10892,6 @@ function mainapi:UpdateGUI(hue, sat, val, default)
 			ColorSequenceKeypoint.new(0, Color3.fromHSV(hue, sat, val)),
 			ColorSequenceKeypoint.new(1, textguigradient.Enabled and Color3.fromHSV(mainapi:Color((hue - 0.075) % 1)) or Color3.fromHSV(hue, sat, val))
 		})
-		VapeLogoGradient2.Color = ColorSequence.new({
-			ColorSequenceKeypoint.new(0, Color3.new(1, 1, 1)),
-			ColorSequenceKeypoint.new(1, Color3.new(1, 1, 1))
-		})
 		VapeLabelCustom.TextColor3 = textguicolorcustomtoggle.Enabled and Color3.fromHSV(textguicolorcustom.Hue, textguicolorcustom.Sat, textguicolorcustom.Value) or VapeLogoGradient.Color.Keypoints[2].Value
 
 		local customcolor = textguicolordrop.Value == 'Custom color' and Color3.fromHSV(textguicolor.Hue, textguicolor.Sat, textguicolor.Value) or nil
@@ -10963,7 +10911,6 @@ function mainapi:UpdateGUI(hue, sat, val, default)
 
 	for i, v in mainapi.Categories do
 		if i == 'Main' then
-			v.Object.VapeLogo.V4Logo.ImageColor3 = Color3.new(1, 1, 1)
 			for _, button in v.Buttons do
 				local basec = rainbow and Color3.fromHSV(mainapi:Color((hue - (button.Index * 0.025)) % 1)) or Color3.fromHSV(hue, sat, val)
 				if button.Enabled then
