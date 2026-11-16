@@ -687,6 +687,44 @@ local function switchItem(tool, delayTime)
 	end
 end
 
+local function liveHandTool()
+	local check = lplr.Character and lplr.Character:FindFirstChild('HandInvItem')
+	return check and check.Value or nil
+end
+
+local function isProjectileTool(tool)
+	if not tool then return false end
+	local meta = bedwars.ItemMeta and bedwars.ItemMeta[tool.Name]
+	return (meta and meta.projectileSource) and true or false
+end
+
+local handDesyncAt = 0
+local function syncHandDesync()
+	local check = lplr.Character and lplr.Character:FindFirstChild('HandInvItem')
+	if not check or not check.Value then return end
+	local serverTool = store.hand and store.hand.tool
+	if not serverTool or serverTool == check.Value or store._equipPending then
+		handDesyncAt = 0
+		return
+	end
+	local now = tick()
+	if handDesyncAt == 0 then
+		handDesyncAt = now
+		return
+	end
+	if now - handDesyncAt < 0.35 then return end
+	handDesyncAt = 0
+	local tool = check.Value
+	store._equipPending = true
+	store._equipSince = tick()
+	task.spawn(function()
+		pcall(function()
+			bedwars.Client:Get(remotes.EquipItem):CallServerAsync({hand = tool})
+		end)
+		store._equipPending = false
+	end)
+end
+
 local function waitForChildOfType(obj, name, timeout, prop)
 	local check, returned = tick() + timeout
 	repeat
@@ -4624,13 +4662,21 @@ run(function()
 			targetinfo.Targets[plr] = tick() + 1
 		end
 
-		return (calc - spawnPos).Unit * projSpeed
+		local dir = calc - spawnPos
+		if dir.Magnitude < 0.01 then return end
+		if projSpeed ~= projSpeed or projSpeed <= 0 or projSpeed == math.huge then return end
+
+		return dir.Unit * projSpeed
 	end
 
 	SilentAim = vape.Categories.Blatant:CreateModule({
 		Name = 'SilentAim',
 		Function = function(callback)
 			if callback then
+				local paMod = vape.Modules and vape.Modules['ProjectileAimbot']
+				if paMod and paMod.Enabled then
+					paMod:SetEnabled(false)
+				end
 				if SAFOVCircle and SAFOVCircle.Enabled then
 					runFOVCircle(true)
 				end
@@ -4645,7 +4691,7 @@ run(function()
 						if typeof(remote) == 'Instance' and remote.Name == 'ProjectileFire' then
 							local args = table.pack(select(2, ...))
 							local ok, newVelocity = pcall(solveSilent, args)
-							if ok and typeof(newVelocity) == 'Vector3' then
+							if ok and typeof(newVelocity) == 'Vector3' and newVelocity.Magnitude > 0 then
 								args[6] = newVelocity
 								if AutoCharge.Enabled and typeof(args[8]) == 'table' then
 									local sourceTool = args[1]
@@ -4656,6 +4702,9 @@ run(function()
 
 									if maxCharge then
 										args[8].drawDurationSec = maxCharge * math.clamp(skidChargePercent.Value / 100, 0, 1)
+										if args[8].drawDurationSeconds ~= nil then
+											args[8].drawDurationSeconds = args[8].drawDurationSec
+										end
 									end
 								end
 							end
@@ -6426,7 +6475,9 @@ run(function()
 					return old(...)
 				end
 			else
-				bedwars.ProjectileController.calculateImportantLaunchValues = old
+				if old then
+					bedwars.ProjectileController.calculateImportantLaunchValues = old
+				end
 				paLockedTarget = nil
 				paLeadStart = 0
 				wasHovering = false
@@ -7386,32 +7437,46 @@ run(function()
 
 	local function fhEquipAwait(tool)
 		if not tool or not tool.Parent then return false end
-		local success = pcall(switchItem, tool, 0.0475)
-		return success
+		if store.hand and store.hand.tool == tool and not store._equipPending then return true end
+		pcall(switchItem, tool, 0.0475)
+		local ping = (store.ping and store.ping.total) or 0.1
+		local deadline = tick() + math.clamp(ping * 1.2 + 0.06, 0.18, 0.32)
+		while tick() < deadline do
+			if store.hand and store.hand.tool == tool then return true end
+			if not tool.Parent or not lplr.Character then return false end
+			task.wait()
+		end
+		local serverTool = store.hand and store.hand.tool
+		if serverTool and serverTool ~= tool then
+			local check = lplr.Character and lplr.Character:FindFirstChild('HandInvItem')
+			if check and check.Value == tool then
+				check.Value = serverTool
+			end
+			return false
+		end
+		return true
 	end
 
 	local fhRestoreToken = 0
-	local function fhRestoreSword()
+	local function fhRestoreSword(onlyIfHand)
 		local sw = store.tools.sword
 		if not sw or not sw.tool or not sw.tool.Parent then return end
 		local check = lplr.Character and lplr.Character:FindFirstChild('HandInvItem')
 		if not check then return end
+		if onlyIfHand and check.Value ~= onlyIfHand then return end
 		fhRestoreToken = fhRestoreToken + 1
 		local token = fhRestoreToken
 		check.Value = sw.tool
 		task.spawn(function()
 			pcall(function() bedwars.Client:Get(remotes.EquipItem):CallServerAsync({hand = sw.tool}) end)
-			for _ = 1, 3 do
-				task.wait(0)
+			for _ = 1, 2 do
+				task.wait(0.06)
 				if token ~= fhRestoreToken then return end
 				if not sw.tool.Parent then return end
 				if not ((Killaura and Killaura.Enabled) or (vape.Modules and vape.Modules['GrandKillaura'] and vape.Modules['GrandKillaura'].Enabled)) then return end
-				if check.Value ~= sw.tool or (store.hand and store.hand.tool ~= sw.tool) then
-					check.Value = sw.tool
-					pcall(function() bedwars.Client:Get(remotes.EquipItem):CallServerAsync({hand = sw.tool}) end)
-				else
-					return
-				end
+				if check.Value ~= sw.tool then return end
+				if store.hand and store.hand.tool == sw.tool then return end
+				pcall(function() bedwars.Client:Get(remotes.EquipItem):CallServerAsync({hand = sw.tool}) end)
 			end
 		end)
 	end
@@ -7477,20 +7542,21 @@ run(function()
 	local function shootProjectile(item, ammo, projectile, itemMeta, selfPos, ent, ignoreSwitch)
 		local meta = bedwars.ProjectileMeta[projectile]
 		if not meta then return false end
+		if not ignoreSwitch and fhBusy then return false end
 
 		local switched = false
 		if not ignoreSwitch then
 			fhBusy = true
 			store._fhBusySince = workspace:GetServerTimeNow()
 			if not fhEquipAwait(item.tool) then
-				fhRestoreSword()
+				fhRestoreSword(item.tool)
 				fhBusy = false
 				return false
 			end
 			switched = true
 			local root = entitylib.character and entitylib.character.RootPart
 			if not root then
-				fhRestoreSword()
+				fhRestoreSword(item.tool)
 				fhBusy = false
 				return false
 			end
@@ -7587,7 +7653,7 @@ run(function()
 		local lifetime = tonumber(meta.predictionLifetimeSec) or tonumber(meta.lifetimeSec) or (projSpeed > 0 and math.min(3, 120 / projSpeed) or 3)
 		if not calc or (flightTime and flightTime > lifetime) then
 			if switched then
-				fhRestoreSword()
+				fhRestoreSword(item.tool)
 				fhBusy = false
 			end
 			return false
@@ -7629,13 +7695,15 @@ run(function()
 
 		FastHitPending = true
 		task.spawn(function()
-			local res = projectileRemote:InvokeServer(
-				item.tool, ammo, projectile, shootPos, selfPos,
-				dir * projSpeed, id, shotMeta,
-				workspace:GetServerTimeNow() - 0.05
-			)
+			local ok, res = pcall(function()
+				return projectileRemote:InvokeServer(
+					item.tool, ammo, projectile, shootPos, selfPos,
+					dir * projSpeed, id, shotMeta,
+					workspace:GetServerTimeNow() - 0.05
+				)
+			end)
 			FastHitPending = false
-			if res then
+			if ok and res then
 				pcall(function() res.Parent = replicatedStorage end)
 				local sound = itemMeta.launchSound
 				sound = sound and sound[math.random(1, #sound)] or nil
@@ -7644,12 +7712,11 @@ run(function()
 				end
 				lastProjectileTime = workspace:GetServerTimeNow()
 			end
+			if switched then
+				fhRestoreSword(item.tool)
+				fhBusy = false
+			end
 		end)
-
-		if switched then
-			fhRestoreSword()
-			fhBusy = false
-		end
 
 		return true
 	end
@@ -7942,6 +8009,7 @@ run(function()
 
 	local function doFastHits()
 		if not FastHits or not FastHits.Enabled then return end
+		if fhBusy and (workspace:GetServerTimeNow() - (store._fhBusySince or 0)) < 0.6 then return end
 		local kaOn = Killaura and Killaura.Enabled
 		local grandOn = vape.Modules and vape.Modules['GrandKillaura'] and vape.Modules['GrandKillaura'].Enabled
 		if not kaOn and not grandOn then return end
@@ -7982,6 +8050,7 @@ run(function()
 
 		autoShootLoop = task.spawn(function()
 			while FastHits and FastHits.Enabled and ((Killaura and Killaura.Enabled) or (vape.Modules and vape.Modules['GrandKillaura'] and vape.Modules['GrandKillaura'].Enabled)) do
+				pcall(syncHandDesync)
 				pcall(doFastHits)
 				task.wait(0.05)
 			end
@@ -8217,9 +8286,6 @@ run(function()
 				if not vape.Loading then
 					local grandMod = vape.Modules and vape.Modules['GrandKillaura']
 					if grandMod and grandMod.Enabled then grandMod:SetEnabled(false) end
-					store._auraModeSync = true
-					if store.KillauraModeDropdown then store.KillauraModeDropdown:SetValue('Killaura') end
-					store._auraModeSync = false
 				end
 				lastAttackTime = 0
 				lastTargetTime = 0
@@ -8842,6 +8908,7 @@ run(function()
 	local GRAND_HIT_PERIOD = 0.29583333333333334
 
 	function GrandFire.projectileInHand()
+		if isProjectileTool(liveHandTool()) then return true end
 		local hand = store.hand
 		if not hand or not hand.tool then return false end
 		if hand.toolType == 'bow' then return true end
@@ -9036,6 +9103,8 @@ run(function()
 		local sword, meta = grandGetAttackData()
 		if not sword or not meta then return false end
 		if store.hand and store.hand.tool and store.hand.toolType ~= 'sword' and not isMeleeWeapon(store.hand.tool.Name) then return false end
+		local liveTool = liveHandTool()
+		if liveTool and liveTool ~= sword.tool and isProjectileTool(liveTool) then return false end
 
 		local tchar = v.Character
 		if not tchar or not tchar.PrimaryPart then return false end
@@ -9117,9 +9186,6 @@ run(function()
 				if not vape.Loading then
 					local kaMod = vape.Modules and vape.Modules['Killaura']
 					if kaMod and kaMod.Enabled then kaMod:SetEnabled(false) end
-					store._auraModeSync = true
-					if store.KillauraModeDropdown then store.KillauraModeDropdown:SetValue('OldKillaura') end
-					store._auraModeSync = false
 				end
 				GrandAttacking = false
 				GrandLastAnimTime = 0
@@ -9280,7 +9346,7 @@ run(function()
 							store.GrandKillauraTarget = chosen
 
 							if hasValidSwing then
-								if not fhBusy and not regentBusy and store.hand and store.hand.tool ~= sword.tool and (tick() - (store._kaSwitch or 0)) > 0.25 and tick() >= GrandFire.ItemUntil then
+								if not fhBusy and not regentBusy and store.hand and store.hand.tool ~= sword.tool and not isProjectileTool(liveHandTool()) and (tick() - (store._kaSwitch or 0)) > 0.25 and tick() >= GrandFire.ItemUntil then
 									store._kaSwitch = tick()
 									switchItem(sword.tool, 0)
 								end
@@ -9590,28 +9656,6 @@ run(function()
 		Name = 'Attack Check',
 		Tooltip = 'checks if attacking ina legit way',
 		Default = false
-	})
-
-	store.KillauraModeDropdown = Killaura:CreateDropdown({
-		Name = 'Killaura Mode',
-		List = {'Killaura', 'OldKillaura'},
-		Tooltip = 'switch between the current Killaura and the old GrandKillaura',
-		Function = function(val)
-			if store._auraModeSync then return end
-			task.defer(function()
-				if store._auraModeSync then return end
-				local kaMod = vape.Modules and vape.Modules['Killaura']
-				local grandMod = vape.Modules and vape.Modules['GrandKillaura']
-				if not kaMod or not grandMod then return end
-				if val == 'OldKillaura' then
-					if kaMod.Enabled then kaMod:SetEnabled(false) end
-					if not grandMod.Enabled then grandMod:SetEnabled(true) end
-				else
-					if grandMod.Enabled then grandMod:SetEnabled(false) end
-					if not kaMod.Enabled then kaMod:SetEnabled(true) end
-				end
-			end)
-		end
 	})
 end)
 						
