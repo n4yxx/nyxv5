@@ -7337,60 +7337,20 @@ run(function()
 
 	local function fhEquipAwait(tool)
 		if not tool or not tool.Parent then return false end
-		if store.hand and store.hand.tool == tool and not store._equipPending then return true end
-		pcall(switchItem, tool, 0.0475)
-		local deadline = tick() + math.clamp(netPing() * 1.5 + 0.08, 0.2, 0.55)
-		local resendAt = tick() + math.clamp(netPing() * 0.75, 0.08, 0.24)
-		local resent = false
-		while tick() < deadline do
-			if store.hand and store.hand.tool == tool then return true end
-			if not tool.Parent or not lplr.Character then return false end
-			if not resent and tick() >= resendAt then
-				resent = true
-				local check = lplr.Character:FindFirstChild('HandInvItem')
-				if check and check.Value ~= tool then check.Value = tool end
-				task.spawn(function()
-					pcall(function()
-						bedwars.Client:Get(remotes.EquipItem):CallServerAsync({hand = tool})
-					end)
-				end)
-			end
-			task.wait()
-		end
-		local serverTool = store.hand and store.hand.tool
-		if serverTool and serverTool ~= tool then
-			local check = lplr.Character and lplr.Character:FindFirstChild('HandInvItem')
-			if check and check.Value == tool then
-				check.Value = serverTool
-			end
-			return false
-		end
-		return true
+		local check = lplr.Character and lplr.Character:FindFirstChild('HandInvItem')
+		if check and check.Value == tool then return true end
+		pcall(switchItem, tool, 0.1)
+		check = lplr.Character and lplr.Character:FindFirstChild('HandInvItem')
+		return check ~= nil and check.Value == tool
 	end
 
-	local fhRestoreToken = 0
 	local function fhRestoreSword(onlyIfHand)
 		local sw = store.tools.sword
 		if not sw or not sw.tool or not sw.tool.Parent then return end
 		local check = lplr.Character and lplr.Character:FindFirstChild('HandInvItem')
 		if not check then return end
 		if onlyIfHand and check.Value ~= onlyIfHand then return end
-		fhRestoreToken = fhRestoreToken + 1
-		local token = fhRestoreToken
-		check.Value = sw.tool
-		task.spawn(function()
-			pcall(function() bedwars.Client:Get(remotes.EquipItem):CallServerAsync({hand = sw.tool}) end)
-			local interval = math.clamp(netPing() * 0.5, 0.045, 0.12)
-			for _ = 1, 4 do
-				task.wait(interval)
-				if token ~= fhRestoreToken then return end
-				if not sw.tool.Parent then return end
-				if not ((Killaura and Killaura.Enabled) or (vape.Modules and vape.Modules['GrandKillaura'] and vape.Modules['GrandKillaura'].Enabled)) then return end
-				if check.Value ~= sw.tool then return end
-				if store.hand and store.hand.tool == sw.tool then return end
-				pcall(function() bedwars.Client:Get(remotes.EquipItem):CallServerAsync({hand = sw.tool}) end)
-			end
-		end)
+		pcall(switchItem, sw.tool, 0)
 	end
 
 	local _fhVelHistory = {}
@@ -7604,14 +7564,20 @@ run(function()
 		)
 
 		FastHitPending = true
-		store._fhPendingAt = tick()
-		task.spawn(function()
-			if switched then
-				task.delay(0.06, function()
-					fhRestoreSword(item.tool)
-					fhBusy = false
-				end)
+		local pendAt = tick()
+		store._fhPendingAt = pendAt
+		if switched then
+			task.delay(0.06, function()
+				fhRestoreSword(item.tool)
+				fhBusy = false
+			end)
+		end
+		task.delay(math.clamp(0.055 + getFHPing() * 0.2, 0.06, 0.18), function()
+			if store._fhPendingAt == pendAt then
+				FastHitPending = false
 			end
+		end)
+		task.spawn(function()
 			local ok, res = pcall(function()
 				return projectileRemote:InvokeServer(
 					item.tool, ammo, projectile, shootPos, selfPos,
@@ -7619,7 +7585,9 @@ run(function()
 					workspace:GetServerTimeNow() - 0.05
 				)
 			end)
-			FastHitPending = false
+			if store._fhPendingAt == pendAt then
+				FastHitPending = false
+			end
 			if ok and res then
 				pcall(function() res.Parent = replicatedStorage end)
 				local sound = itemMeta.launchSound
@@ -7901,7 +7869,7 @@ run(function()
 		for i = 1, #hotbar do
 			local hv = hotbar[i]
 			if hv and hv.item and hv.item.itemType then
-				if hv.item.itemType == item.itemType and not bowSlot then
+				if not bowSlot and (hv.item.tool == item.tool or hv.item.itemType == item.itemType) then
 					bowSlot = i - 1
 				end
 				if isMeleeWeapon(hv.item.itemType) and not swordSlot then
@@ -7910,13 +7878,18 @@ run(function()
 			end
 		end
 		if not bowSlot then return end
+		if not (item.tool and item.tool.Parent) then return end
 
+		local restoreSlot = swordSlot or originalSlot
 		fhBusy = true
 		store._fhBusySince = workspace:GetServerTimeNow()
-		if hotbarSwitch(bowSlot) then task.wait(math.clamp(netPing() * 0.55 + 0.02, 0.035, 0.16)) end
+		pcall(switchItem, item.tool, 0.1)
+		pcall(hotbarSwitch, bowSlot)
 		shootProjectile(item, ammo, projectile, itemMeta, selfPos, ent, true)
-		task.wait(math.clamp(0.06 + netPing() * 0.2, 0.075, 0.15))
-		hotbarSwitch(swordSlot or originalSlot)
+		fhRestoreSword()
+		task.spawn(function()
+			pcall(hotbarSwitch, restoreSlot)
+		end)
 		fhBusy = false
 	end
 
