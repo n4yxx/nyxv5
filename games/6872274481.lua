@@ -67,7 +67,7 @@ local function getLocalKits()
 	end
 	return list
 end
-getgenv().aeroTeamColors = {
+getgenv().nyxTeamColors = {
 	[1] = {name = 'blue',   color = Color3.fromRGB(85, 150, 255)},
 	[2] = {name = 'orange', color = Color3.fromRGB(255, 150, 50)},
 	[3] = {name = 'pink',   color = Color3.fromRGB(255, 100, 200)},
@@ -226,8 +226,8 @@ local function addBlur(parent)
 	return blur
 end
 
-local readyGate = getgenv().aeroReadyGate or {}
-getgenv().aeroReadyGate = readyGate
+local readyGate = getgenv().nyxReadyGate or {}
+getgenv().nyxReadyGate = readyGate
 
 function readyGate.Release()
 	if not readyGate.Held then
@@ -3066,10 +3066,10 @@ run(function()
         if isTargetBehindWall(ent) then return end
         if objects[ent] then return end
         for _, old in ent.Character:GetChildren() do
-            if old.Name == 'AeroHitbox' then old:Destroy() end
+            if old.Name == 'NyxHitbox' then old:Destroy() end
         end
         local hitbox = Instance.new('Part')
-        hitbox.Name = 'AeroHitbox'
+        hitbox.Name = 'NyxHitbox'
         hitbox.Archivable = false
         hitbox.Size = cachedExpandSize
         hitbox.Position = ent.RootPart.Position
@@ -3112,7 +3112,7 @@ run(function()
             local char = plr.Character
             if char then
                 for _, old in char:GetChildren() do
-                    if old.Name == 'AeroHitbox' then old:Destroy() end
+                    if old.Name == 'NyxHitbox' then old:Destroy() end
                 end
             end
         end
@@ -3120,7 +3120,7 @@ run(function()
             local char = ent.Character
             if char then
                 for _, old in char:GetChildren() do
-                    if old.Name == 'AeroHitbox' then old:Destroy() end
+                    if old.Name == 'NyxHitbox' then old:Destroy() end
                 end
             end
         end
@@ -10689,11 +10689,11 @@ run(function()
 		if not isLootEnabled(lootType) then return end
 		if Reference[lootHandle] then return end 
 		local dropRoot = lootHandle.Parent
-		if dropRoot and dropRoot:GetAttribute('AeroBanked') then return end
+		if dropRoot and dropRoot:GetAttribute('NyxBanked') then return end
 		if dropRoot then
 			local bankedConn
-			bankedConn = dropRoot:GetAttributeChangedSignal('AeroBanked'):Connect(function()
-				if dropRoot:GetAttribute('AeroBanked') and Reference[lootHandle] then
+			bankedConn = dropRoot:GetAttributeChangedSignal('NyxBanked'):Connect(function()
+				if dropRoot:GetAttribute('NyxBanked') and Reference[lootHandle] then
 					Reference[lootHandle]:Destroy()
 					Reference[lootHandle] = nil
 				end
@@ -11677,7 +11677,7 @@ run(function()
 		if not theirTeam then return nil end
 		local myTeam = tonumber(lplr:GetAttribute('Team'))
 		if myTeam and myTeam == theirTeam then return nil end
-		local entry = getgenv().aeroTeamColors[theirTeam]
+		local entry = getgenv().nyxTeamColors[theirTeam]
 		return entry and entry.color
 	end
 	local udim2fromOffset = UDim2.fromOffset
@@ -14531,7 +14531,7 @@ run(function()
 	end
 	local function teamColor(plr)
 		local t = tonumber(plr:GetAttribute('Team'))
-		local entry = t and getgenv().aeroTeamColors[t]
+		local entry = t and getgenv().nyxTeamColors[t]
 		return entry and entry.color or Color3.fromRGB(255, 255, 255)
 	end
 	local PLACEHOLDER = 'rbxassetid://6031075931' 
@@ -22413,7 +22413,7 @@ run(function()
     compactPadding.PaddingRight = UDim.new(0, 6)
     compactPadding.Parent = compactMainFrame
     
-	local teamColors = getgenv().aeroTeamColors
+	local teamColors = getgenv().nyxTeamColors
     
     local function getBedTeamColor(bed)
         local teamId = bed:GetAttribute('TeamID') or bed:GetAttribute('Team') or bed:GetAttribute('TeamId')
@@ -23124,7 +23124,7 @@ run(function()
 			local name = (bedwars.ItemMeta[block.Name] and bedwars.ItemMeta[block.Name].displayName) or block.Name
 			hbRef = bedwars.Roact.createRef()
 			local part = Instance.new('Part')
-			part.Name = 'AeroNukerHB'
+			part.Name = 'NyxNukerHB'
 			part.Size = Vector3.one
 			part.CFrame = CFrame.new(bedwars.BlockController:getWorldPosition(blockRef.blockPosition))
 			part.Transparency = 1
@@ -32021,11 +32021,11 @@ run(function()
 		part.CanCollide = false
 		part.AssemblyLinearVelocity = Vector3.zero
 		part.CFrame = hiddenSpot(Banked[part])
-		part:SetAttribute('AeroBanked', true)
+		part:SetAttribute('NyxBanked', true)
 		part.AncestryChanged:Once(function()
 			Banked[part] = nil
 			pcall(function()
-				part:SetAttribute('AeroBanked', nil)
+				part:SetAttribute('NyxBanked', nil)
 			end)
 			conn:Disconnect()
 			for obj, value in saved do

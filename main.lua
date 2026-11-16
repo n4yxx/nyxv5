@@ -26,7 +26,7 @@ local vape
 local loadstring = function(...)
 	local res, err = loadstring(...)
 	if err and vape then
-		vape:CreateNotification('Vape', 'Failed to load : '..err, 30, 'alert')
+		vape:CreateNotification('NYX', 'Failed to load : '..err, 30, 'alert')
 	end
 	return res
 end
@@ -262,7 +262,7 @@ if not isfolder('NYX/assets/' .. gui) then
 end
 
 local guiPath = 'NYX/guis/' .. gui .. '.lua'
-local guiBuild = '--NYXBUILD:vape5'
+local guiBuild = '--NYXBUILD:nyxv4'
 local guiSource = isfile(guiPath) and readfile(guiPath) or ''
 if type(guiSource) ~= 'string' or not guiSource:find(guiBuild, 1, true) then
 	pcall(delfile, guiPath)

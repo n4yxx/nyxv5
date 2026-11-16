@@ -159,7 +159,7 @@ local function serverHop(pointer, filter)
 		table.insert(visited, game.JobId)
 	end
 	if not pointer then
-		notif('Vape', 'Searching for an available server.', 2)
+		notif('NYX', 'Searching for an available server.', 2)
 	end
 
 	local suc, httpdata = pcall(function()
@@ -172,7 +172,7 @@ local function serverHop(pointer, filter)
 				cacheExpire, cache = tick() + 60, httpdata
 				table.insert(attempted, v.id)
 
-				notif('Vape', 'Found! Teleporting.', 5)
+				notif('NYX', 'Found! Teleporting.', 5)
 				teleportService:TeleportToPlaceInstance(game.PlaceId, v.id)
 				return
 			end
@@ -181,10 +181,10 @@ local function serverHop(pointer, filter)
 		if data.nextPageCursor then
 			serverHop(data.nextPageCursor, filter)
 		else
-			notif('Vape', 'Failed to find an available server.', 5, 'warning')
+			notif('NYX', 'Failed to find an available server.', 5, 'warning')
 		end
 	else
-		notif('Vape', 'Failed to grab servers. ('..(data and data.errors[1].message or 'no data')..')', 5, 'warning')
+		notif('NYX', 'Failed to grab servers. ('..(data and data.errors[1].message or 'no data')..')', 5, 'warning')
 	end
 end
 
@@ -7714,9 +7714,9 @@ run(function()
                     lightingService.OutdoorAmbient = Color3.fromRGB(255, 255, 255)
                     lightingService.ExposureCompensation = 2
                     
-                    if not lightingService:FindFirstChild("VapeSun") then
+                    if not lightingService:FindFirstChild("NYXSun") then
                         local sun = Instance.new("SunRaysEffect")
-                        sun.Name = "VapeSun"
+                        sun.Name = "NYXSun"
                         sun.Intensity = 0.1
                         sun.Spread = 1
                         sun.Parent = lightingService
@@ -7727,7 +7727,7 @@ run(function()
                     lightingService.OutdoorAmbient = Color3.fromRGB(255, 255, 255)
                     lightingService.ExposureCompensation = 1
                     
-                    local sun = lightingService:FindFirstChild("VapeSun")
+                    local sun = lightingService:FindFirstChild("NYXSun")
                     if sun then
                         sun:Destroy()
                     end

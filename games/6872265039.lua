@@ -1253,7 +1253,7 @@ run(function()
 		if not theirTeam then return nil end
 		local myTeam = tonumber(lplr:GetAttribute('Team'))
 		if myTeam and myTeam == theirTeam then return nil end
-		local entry = getgenv().aeroTeamColors[theirTeam]
+		local entry = getgenv().nyxTeamColors[theirTeam]
 		return entry and entry.color
 	end
 	local udim2fromOffset = UDim2.fromOffset
@@ -4279,7 +4279,7 @@ end)
 run(function()
 	local RegionLock
 	local AllowedRegions
-	local readyGate = getgenv().aeroReadyGate or {Release = function() end}
+	local readyGate = getgenv().nyxReadyGate or {Release = function() end}
 	local lockLabel = 'next match'
 	local knownRegion
 	local fetchBusy = false

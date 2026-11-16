@@ -125,7 +125,7 @@ run(function()
         end
 
         local gui = Instance.new('BillboardGui')
-        gui.Name = 'aeroeggesp'
+        gui.Name = 'nyxeggesp'
         gui.Adornee = part
         gui.AlwaysOnTop = true
         gui.Size = UDim2.fromOffset(200, 50)
@@ -145,7 +145,7 @@ run(function()
         text.Parent = gui
 
         local highlight = Instance.new('Highlight')
-        highlight.Name = 'aeroegghighlight'
+        highlight.Name = 'nyxegghighlight'
         highlight.Adornee = egg
         highlight.FillTransparency = 0.75
         highlight.OutlineTransparency = 0

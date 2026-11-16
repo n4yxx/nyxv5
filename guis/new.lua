@@ -1,4 +1,4 @@
---NYXBUILD:vape5
+--NYXBUILD:nyxv4
 local mainapi = {
 	Categories = {},
 	GUIColor = {
@@ -88,8 +88,6 @@ local getcustomassets = {
 	['NYX/assets/new/guisettings.png'] = 'rbxassetid://14368318994',
 	['NYX/assets/new/guislider.png'] = 'rbxassetid://14368320020',
 	['NYX/assets/new/guisliderrain.png'] = 'rbxassetid://14368321228',
-	['NYX/assets/new/guiv4.png'] = 'rbxassetid://14368322199',
-	['NYX/assets/new/guivape.png'] = 'rbxassetid://14657521312',
 	['NYX/assets/new/info.png'] = 'rbxassetid://14368324807',
 	['NYX/assets/new/inventoryicon.png'] = 'rbxassetid://14928011633',
 	['NYX/assets/new/legit.png'] = 'rbxassetid://14425650534',
@@ -118,10 +116,7 @@ local getcustomassets = {
 	['NYX/assets/new/targetplayers2.png'] = 'rbxassetid://14497397862',
 	['NYX/assets/new/targetstab.png'] = 'rbxassetid://14497393895',
 	['NYX/assets/new/textguiicon.png'] = 'rbxassetid://14368355456',
-	['NYX/assets/new/textv4.png'] = 'rbxassetid://14368357095',
-	['NYX/assets/new/textvape.png'] = 'rbxassetid://14368358200',
 	['NYX/assets/new/utilityicon.png'] = 'rbxassetid://14368359107',
-	['NYX/assets/new/vape.png'] = 'rbxassetid://14373395239',
 	['NYX/assets/new/warning.png'] = 'rbxassetid://14368361552',
 	['NYX/assets/new/worldicon.png'] = 'rbxassetid://14368362492',
 	['NYX/assets/new/eyeopen.png'] = 'rbxassetid://85547987939285',
@@ -140,7 +135,7 @@ local function safecall(func, ...)
 	xpcall(function()
 		func(unpack(args))
 	end, function(err)
-		warn("[Vape] GUI Error: "..err)
+		warn("[NYX] GUI Error: "..err)
 	end)
 end
 
@@ -1485,7 +1480,7 @@ getcustomasset = function(path)
 	return result
 end
 
-local BRAND_BUILD = 'vape4'
+local BRAND_BUILD = 'nyxv4'
 
 local function getBrandAsset(path)
 	if not assetfunction then return '' end
@@ -3957,7 +3952,7 @@ function mainapi:CreateGUI()
 	makeDraggable(window)
 	local logo = Instance.new('ImageLabel')
 	logo.Name = 'VapeLogo'
-	logo.Size = UDim2.fromOffset(62, 18)
+	logo.Size = UDim2.fromOffset(66, 18)
 	logo.Position = UDim2.fromOffset(11, 10)
 	logo.BackgroundTransparency = 1
 	logo.Image = getBrandAsset('NYX/assets/new/guivape.png')
@@ -3967,34 +3962,35 @@ function mainapi:CreateGUI()
 		logo.Visible = false
 		local logoText = Instance.new('TextLabel')
 		logoText.Name = 'VapeLogoText'
-		logoText.Size = UDim2.fromOffset(62, 18)
+		logoText.Size = UDim2.fromOffset(66, 18)
 		logoText.Position = UDim2.fromOffset(11, 10)
 		logoText.BackgroundTransparency = 1
 		logoText.FontFace = Font.fromEnum(Enum.Font.GothamBlack)
-		logoText.Text = 'VAPE'
-		logoText.TextSize = 17
+		logoText.Text = 'NYX'
+		logoText.TextSize = 19
 		logoText.TextXAlignment = Enum.TextXAlignment.Left
-		logoText.TextColor3 = logo.ImageColor3
+		logoText.TextColor3 = Color3.new(1, 1, 1)
 		logoText.Parent = window
 	end
 	local logov4 = Instance.new('ImageLabel')
 	logov4.Name = 'V4Logo'
-	logov4.Size = UDim2.fromOffset(28, 16)
-	logov4.Position = UDim2.new(1, 1, 0, 1)
+	logov4.Size = UDim2.fromOffset(31, 18)
+	logov4.Position = UDim2.new(1, 0, 0, 1)
 	logov4.BackgroundTransparency = 1
 	logov4.Image = getBrandAsset('NYX/assets/new/guiv4.png')
+	logov4.ImageColor3 = Color3.new(1, 1, 1)
 	logov4.Parent = logo
 	if logov4.Image == '' then
 		logov4.Visible = false
 		local v4Text = Instance.new('TextLabel')
 		v4Text.Name = 'V4LogoText'
-		v4Text.Size = UDim2.fromOffset(28, 16)
-		v4Text.Position = UDim2.fromOffset(74, 11)
+		v4Text.Size = UDim2.fromOffset(31, 18)
+		v4Text.Position = UDim2.fromOffset(78, 9)
 		v4Text.BackgroundTransparency = 1
 		v4Text.FontFace = Font.fromEnum(Enum.Font.GothamBlack)
 		v4Text.Text = 'V4'
 		v4Text.TextSize = 15
-		v4Text.TextColor3 = logo.ImageColor3
+		v4Text.TextColor3 = Color3.fromRGB(201, 164, 22)
 		v4Text.Parent = window
 	end
 	local children = Instance.new('Frame')
@@ -4054,7 +4050,7 @@ function mainapi:CreateGUI()
 	settingsversion.Size = UDim2.new(1, 0, 0, 16)
 	settingsversion.Position = UDim2.new(0, 0, 1, -16)
 	settingsversion.BackgroundTransparency = 1
-	settingsversion.Text = 'Vape '..mainapi.Version..' '..(
+	settingsversion.Text = 'NYX '..mainapi.Version..' '..(
 		isfile('NYX/profiles/commit.txt') and readfile('NYX/profiles/commit.txt'):sub(1, 6) or ''
 	)..' '..BRAND_BUILD
 	settingsversion.TextColor3 = color.Dark(uipallet.Text, 0.43)
@@ -7999,7 +7995,7 @@ function mainapi:Load(skipgui, profile)
 		if result then
 			guidata = result
 		else
-			self:CreateNotification('Vape', 'Failed to load GUI settings. Using defaults.', 10, 'alert')
+			self:CreateNotification('NYX', 'Failed to load GUI settings. Using defaults.', 10, 'alert')
 		end
 
 		if guidata.MobileSettings then
@@ -8095,10 +8091,10 @@ function mainapi:Load(skipgui, profile)
 		if result then
 			savedata = result
 		else
-			self:CreateNotification('Vape', 'Failed to load '..self.Profile..' profile. Creating a new one.', 10, 'alert')
+			self:CreateNotification('NYX', 'Failed to load '..self.Profile..' profile. Creating a new one.', 10, 'alert')
 		end
 	else
-		self:CreateNotification('Vape', 'No profile found. Creating new profile for '..self.Profile, 8, 'info')
+		self:CreateNotification('NYX', 'No profile found. Creating new profile for '..self.Profile, 8, 'info')
 	end
 
 	for i, v in savedata.Categories or {} do
@@ -8498,7 +8494,7 @@ local scarcitybanner = Instance.new('TextLabel')
 scarcitybanner.Size = UDim2.fromScale(1, 0.02)
 scarcitybanner.Position = UDim2.fromScale(0, 0.97)
 scarcitybanner.BackgroundTransparency = 1
-scarcitybanner.Text = 'shitty ass vape script gang gang'
+scarcitybanner.Text = 'nyxv4'
 scarcitybanner.TextScaled = true
 scarcitybanner.TextColor3 = Color3.new(1, 1, 1)
 scarcitybanner.TextStrokeTransparency = 0.5
@@ -9525,7 +9521,7 @@ general:CreateButton({
 			loadstring(game:HttpGet('https://raw.githubusercontent.com/nyxv4/nyx1/'..((isfile('NYX/profiles/commit.txt') and readfile('NYX/profiles/commit.txt')) or 'main')..'/main.lua', true))()
 		end
 	end,
-	Tooltip = 'This will set your profile to the default settings of Vape'
+	Tooltip = 'This will set your profile to the default settings of NYX'
 })
 general:CreateButton({
 	Name = 'Self destruct',
@@ -9948,7 +9944,7 @@ local textguianimations = textgui:CreateToggle({
 })
 local textguiwatermark = textgui:CreateToggle({
 	Name = 'Watermark',
-	Tooltip = 'Renders a vape watermark',
+	Tooltip = 'Renders a NYX watermark',
 	Function = function()
 		mainapi:UpdateTextGUI()
 	end
@@ -10476,7 +10472,7 @@ end))
 local VapeLogoV4 = Instance.new('ImageLabel')
 VapeLogoV4.Name = 'Logo2'
 VapeLogoV4.Size = UDim2.fromOffset(33, 18)
-VapeLogoV4.Position = UDim2.new(1, 1, 0, 1)
+VapeLogoV4.Position = UDim2.new(1, 4, 0, 2)
 VapeLogoV4.BackgroundColor3 = Color3.new()
 VapeLogoV4.BackgroundTransparency = 1
 VapeLogoV4.BorderSizePixel = 0
@@ -10944,7 +10940,7 @@ function mainapi:UpdateGUI(hue, sat, val, default)
 			ColorSequenceKeypoint.new(0, Color3.fromHSV(hue, sat, val)),
 			ColorSequenceKeypoint.new(1, textguigradient.Enabled and Color3.fromHSV(mainapi:Color((hue - 0.075) % 1)) or Color3.fromHSV(hue, sat, val))
 		})
-		VapeLogoGradient2.Color = textguigradient.Enabled and textguigradientv4.Enabled and VapeLogoGradient.Color or ColorSequence.new({
+		VapeLogoGradient2.Color = ColorSequence.new({
 			ColorSequenceKeypoint.new(0, Color3.new(1, 1, 1)),
 			ColorSequenceKeypoint.new(1, Color3.new(1, 1, 1))
 		})
@@ -10967,7 +10963,7 @@ function mainapi:UpdateGUI(hue, sat, val, default)
 
 	for i, v in mainapi.Categories do
 		if i == 'Main' then
-			v.Object.VapeLogo.V4Logo.ImageColor3 = Color3.fromHSV(hue, sat, val)
+			v.Object.VapeLogo.V4Logo.ImageColor3 = Color3.new(1, 1, 1)
 			for _, button in v.Buttons do
 				local basec = rainbow and Color3.fromHSV(mainapi:Color((hue - (button.Index * 0.025)) % 1)) or Color3.fromHSV(hue, sat, val)
 				if button.Enabled then
