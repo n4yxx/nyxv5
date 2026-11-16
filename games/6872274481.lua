@@ -8783,18 +8783,16 @@ run(function()
 	local GrandAnimationTween
 	local GrandLimit
 	local GrandLegit
-	local GrandAirHit
-	local GrandAirHitsChance
 	local GrandAttackCheck
 	local GrandParticles, GrandBoxes = {}, {}
 	local GrandAttacking = false
-	local GrandSwingCooldown = 0
+	local GrandLastSrv = 0
 	local GrandLastAnimTime = 0
 	local GrandAnimTween
 	local GrandArmC0
 	local GrandAnimActive = false
 	local GRAND_SERVER_REACH = 14.399
-	local GRAND_ANIM_PERIOD = 0.35
+	local GRAND_HIT_PERIOD = 0.29583333333333334
 
 	local function grandGetAttackData()
 		if not entitylib.isAlive then return false end
@@ -8882,7 +8880,7 @@ run(function()
 		Function = function(callback)
 			if callback then
 				GrandAttacking = false
-				GrandSwingCooldown = 0
+				GrandLastSrv = workspace:GetServerTimeNow() - GRAND_HIT_PERIOD
 				GrandLastAnimTime = 0
 
 				if inputService.TouchEnabled then
@@ -8896,7 +8894,7 @@ run(function()
 					task.spawn(function()
 						local started = false
 						repeat
-							if GrandAttacking then
+							if GrandAttacking and not (GrandLegit and GrandLegit.Enabled) then
 								local okArm = pcall(function()
 									if not GrandArmC0 then
 										GrandArmC0 = gameCamera.Viewmodel.RightHand.RightWrist.C0
@@ -9013,34 +9011,25 @@ run(function()
 								end
 
 								if delta.Magnitude > GrandAttackRange.Value then continue end
-								if (tick() - GrandSwingCooldown) < math.max(GrandChargeTime.Value, 0.296) then continue end
+
+								local srvNow = workspace:GetServerTimeNow()
+								local fireTarget = GRAND_HIT_PERIOD - math.min((1 / 60) * 0.5, GRAND_HIT_PERIOD * 0.06)
+								if (srvNow - GrandLastSrv) < fireTarget then continue end
 
 								local tchar = v.Character
 								local actualRoot = tchar and tchar.PrimaryPart
 								if actualRoot then
-									if GrandAirHit.Enabled and GrandAirHitsChance.Value < 100 then
-										local hum = tchar:FindFirstChildOfClass('Humanoid')
-										if hum then
-											local inAir = hum.FloorMaterial == Enum.Material.Air
-											if not inAir then
-												local state = hum:GetState()
-												inAir = state == Enum.HumanoidStateType.Jumping or state == Enum.HumanoidStateType.Freefall
-											end
-											if not inAir then
-												inAir = math.abs(actualRoot.AssemblyLinearVelocity.Y) > 3
-											end
-											if inAir and math.random(1, 100) > GrandAirHitsChance.Value then continue end
-										end
-									end
-
 									if sword.tool.Name:find('summoner_claw') then
 										pcall(function() KaidaController:request(tchar) end)
 										continue
 									end
 
-									GrandSwingCooldown = tick()
+									GrandLastSrv = GrandLastSrv + GRAND_HIT_PERIOD
+									if GrandLastSrv < srvNow then
+										GrandLastSrv = srvNow
+									end
 									if bedwars.SwordController then
-										bedwars.SwordController.lastAttack = workspace:GetServerTimeNow()
+										bedwars.SwordController.lastAttack = srvNow
 									end
 									store.attackReach = (delta.Magnitude * 100) // 1 / 100
 									store.attackReachUpdate = tick() + 1
@@ -9049,7 +9038,7 @@ run(function()
 								end
 							end
 
-							if #attacked > 0 and not GrandSwing.Enabled and not GrandLegit.Enabled and (tick() - GrandLastAnimTime) >= GRAND_ANIM_PERIOD then
+							if #attacked > 0 and not GrandSwing.Enabled and not GrandLegit.Enabled and (tick() - GrandLastAnimTime) >= math.max(GrandChargeTime.Value, 0.11) then
 								GrandLastAnimTime = tick()
 								if isOnTinker() then
 									playTinkerSwing()
@@ -9082,7 +9071,7 @@ run(function()
 						entitylib.character.RootPart.CFrame = CFrame.lookAt(entitylib.character.RootPart.Position, Vector3.new(vec.X, entitylib.character.RootPart.Position.Y + 0.001, vec.Z))
 					end
 
-					task.wait(1 / math.max(GrandUpdateRate.Value, 1))
+					task.wait(math.min(1 / math.max(GrandUpdateRate.Value, 1), 1 / 240))
 				until not GrandKillaura.Enabled
 			else
 				store.GrandKillauraTarget = nil
@@ -9129,7 +9118,7 @@ run(function()
 		Name = 'Swing time',
 		Min = 0,
 		Max = 0.5,
-		Default = 0.42,
+		Default = 0.35,
 		Decimal = 100
 	})
 	GrandUpdateRate = GrandKillaura:CreateSlider({
@@ -9342,37 +9331,11 @@ run(function()
 		Name = 'Swing only',
 		Tooltip = 'Only attacks while swinging manually'
 	})
-	GrandAirHit = GrandKillaura:CreateToggle({
-		Name = 'Air Hits',
-		Default = true,
-		Tooltip = 'hit people in the air',
-		Function = function(cb)
-			if GrandAirHitsChance then
-				GrandAirHitsChance.Object.Visible = cb
-			end
-		end
-	})
-	GrandAirHitsChance = GrandKillaura:CreateSlider({
-		Name = 'Air Hits Chance',
-		Min = 0,
-		Max = 100,
-		Default = 100,
-		Suffix = '%',
-		Decimal = 5,
-		Darker = true,
-		Visible = false
-	})
 	GrandAttackCheck = GrandKillaura:CreateToggle({
 		Name = 'Attack Check',
 		Tooltip = 'checks if attacking ina legit way',
 		Default = false
 	})
-
-	task.defer(function()
-		if GrandAirHit and GrandAirHit.Enabled and GrandAirHitsChance and GrandAirHitsChance.Object then
-			GrandAirHitsChance.Object.Visible = true
-		end
-	end)
 end)
 						
 run(function()
