@@ -8799,7 +8799,8 @@ run(function()
 		AcqTime = 0,
 		ScanTime = 0,
 		ItemUntil = 0,
-		LastSword = nil
+		SwapUntil = 0,
+		HandTool = nil
 	}
 	local GrandAnimTween
 	local GrandArmC0
@@ -8821,9 +8822,31 @@ run(function()
 		return (meta and meta.projectileSource) and true or false
 	end
 
+	function GrandFire.handSwapDelay()
+		local ping = 0.08
+		pcall(function()
+			local p = lplr:GetNetworkPing()
+			if type(p) == 'number' and p > 0 then ping = p end
+		end)
+		return math.clamp(ping * 0.5 + 0.03, 0.05, 0.35)
+	end
+
+	function GrandFire.chargingProjectile()
+		local ok, charging = pcall(function()
+			return bedwars.DaoController and bedwars.DaoController.chargingMaid
+		end)
+		return ok and charging == true
+	end
+
 	function GrandFire.watchHand()
-		if GrandFire.projectileInHand() then
-			GrandFire.ItemUntil = tick() + 0.15
+		local hand = store.hand
+		local name = hand and hand.tool and hand.tool.Name or nil
+		if name ~= GrandFire.HandTool then
+			GrandFire.HandTool = name
+			GrandFire.SwapUntil = tick() + GrandFire.handSwapDelay()
+		end
+		if GrandFire.projectileInHand() or GrandFire.chargingProjectile() then
+			GrandFire.ItemUntil = tick() + 0.25
 		end
 	end
 
@@ -8981,6 +9004,7 @@ run(function()
 		if fhBusy and (workspace:GetServerTimeNow() - (store._fhBusySince or 0)) < 0.10 then return false end
 		if lastProjectileTime > 0 and (workspace:GetServerTimeNow() - lastProjectileTime) < 0.075 then return false end
 		if tick() < GrandFire.ItemUntil then return false end
+		if tick() < GrandFire.SwapUntil then return false end
 		if store._equipPending and (tick() - (store._equipSince or 0)) < 0.75 then return false end
 
 		local v = GrandFire.resolveTarget()
@@ -9027,7 +9051,8 @@ run(function()
 		GrandFire.GraceTarget, GrandFire.GraceUntil = nil, 0
 		GrandFire.AcqTime, GrandFire.AcqRes = 0, nil
 		GrandFire.ItemUntil = 0
-		GrandFire.LastSword = nil
+		GrandFire.SwapUntil = 0
+		GrandFire.HandTool = nil
 
 		GrandFire.Loop = task.spawn(function()
 			while GrandKillaura and GrandKillaura.Enabled do
@@ -9058,7 +9083,8 @@ run(function()
 		GrandFire.GraceTarget, GrandFire.GraceUntil = nil, 0
 		GrandFire.AcqTime, GrandFire.AcqRes = 0, nil
 		GrandFire.ItemUntil = 0
-		GrandFire.LastSword = nil
+		GrandFire.SwapUntil = 0
+		GrandFire.HandTool = nil
 		GrandLastSrv = 0
 	end
 
@@ -9153,10 +9179,6 @@ run(function()
 
 					local attacked = {}
 					if sword then
-						if GrandFire.LastSword ~= sword.tool.Name then
-							GrandFire.LastSword = sword.tool.Name
-							resetSwordCooldown()
-						end
 						local now = tick()
 						if not GrandFire.ScanCache or (now - GrandFire.ScanTime) >= 0.05 then
 							local avoidTarget = (Killaura and Killaura.Enabled) and store.KillauraTarget or nil
@@ -9222,7 +9244,7 @@ run(function()
 							store.GrandKillauraTarget = chosen
 
 							if hasValidSwing then
-								if not fhBusy and not regentBusy and store.hand and store.hand.tool ~= sword.tool and (tick() - (store._kaSwitch or 0)) > 0.25 and tick() >= GrandFire.ItemUntil then
+								if not fhBusy and not regentBusy and not GrandFire.projectileInHand() and store.hand and store.hand.tool ~= sword.tool and (tick() - (store._kaSwitch or 0)) > 0.25 and tick() >= GrandFire.ItemUntil then
 									store._kaSwitch = tick()
 									switchItem(sword.tool, 0)
 								end
