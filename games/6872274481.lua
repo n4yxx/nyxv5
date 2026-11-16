@@ -6795,6 +6795,67 @@ run(function()
 		return delta >= math.max(speed - SwordTiming.CooldownCorrection, 0)
 	end
 
+	-- The game's own swing animation is skipped while a fury potion buff is up, so
+	-- drive the viewmodel wrist ourselves with the same slash keyframes the custom
+	-- animation modes use. This does not depend on the game animation pipeline.
+	function SwordTiming.furySwing()
+		local scale = SwordTiming.furyScale()
+		if scale >= 1 then return end
+		local frames = anims and anims.Normal
+		if not frames then return end
+
+		local vm = gameCamera and gameCamera:FindFirstChild('Viewmodel')
+		local hand = vm and vm:FindFirstChild('RightHand')
+		local wrist = hand and hand:FindFirstChild('RightWrist')
+		if not wrist then return end
+
+		local now = tick()
+		if SwordTiming._furySwingAt and (now - SwordTiming._furySwingAt) < 0.08 then return end
+		SwordTiming._furySwingAt = now
+
+		if SwordTiming._furyWrist ~= wrist or not SwordTiming._furyC0 then
+			SwordTiming._furyWrist = wrist
+			SwordTiming._furyC0 = armC0 or wrist.C0
+		end
+		local base = SwordTiming._furyC0
+
+		if SwordTiming._furyTween then
+			pcall(function() SwordTiming._furyTween:Cancel() end)
+			SwordTiming._furyTween = nil
+		end
+		local token = {}
+		SwordTiming._furyToken = token
+
+		SwordTiming._furyThread = task.spawn(function()
+			for _, frame in frames do
+				if SwordTiming._furyToken ~= token or not wrist.Parent then return end
+				local tw = tweenService:Create(wrist, TweenInfo.new(math.max(frame.Time * scale, 0.02), Enum.EasingStyle.Linear), {
+					C0 = base * frame.CFrame
+				})
+				SwordTiming._furyTween = tw
+				tw:Play()
+				tw.Completed:Wait()
+			end
+			if SwordTiming._furyToken ~= token or not wrist.Parent then return end
+			local tw = tweenService:Create(wrist, TweenInfo.new(0.12 * scale, Enum.EasingStyle.Exponential), {C0 = base})
+			SwordTiming._furyTween = tw
+			tw:Play()
+		end)
+	end
+
+	function SwordTiming.furyRestore()
+		SwordTiming._furyToken = nil
+		local wrist = SwordTiming._furyWrist
+		if not wrist or not wrist.Parent or not SwordTiming._furyC0 then return end
+		if SwordTiming._furyTween then
+			pcall(function() SwordTiming._furyTween:Cancel() end)
+			SwordTiming._furyTween = nil
+		end
+		local tw = tweenService:Create(wrist, TweenInfo.new(0.15, Enum.EasingStyle.Exponential), {C0 = SwordTiming._furyC0})
+		SwordTiming._furyTween = tw
+		tw:Play()
+	end
+
 	vape:Clean(vapeEvents.EntityDamageEvent.Event:Connect(function(damageTable)
 		if damageTable.fromEntity ~= lplr.Character or damageTable.damageType ~= 0 then return end
 		if typeof(damageTable.entityInstance) ~= 'Instance' then return end
@@ -7096,6 +7157,11 @@ run(function()
 				local animType = (bedwars.AnimationType and (bedwars.AnimationType.SWORD_SWING or bedwars.AnimationType.FP_USE_ITEM)) or 15
 				bedwars.ViewmodelController:playAnimation(animType)
 			end)
+		end
+
+		-- 4. Fury buffs make the game skip its swing; animate the wrist directly.
+		if SwordTiming.furyScale() < 1 then
+			pcall(SwordTiming.furySwing)
 		end
 	end
 
@@ -8270,6 +8336,7 @@ run(function()
 			killauraFireLoop = nil
 		end
 		SwordTiming.resetGhost()
+		SwordTiming.furyRestore()
 		_graceTarget = nil
 		_graceUntil = 0
 		_fastAcqTime = 0
@@ -8315,7 +8382,7 @@ run(function()
 					task.spawn(function()
 						local started = false
 						repeat
-							if Attacking and not (LegitAura and LegitAura.Enabled) then
+							if Attacking and not (LegitAura and LegitAura.Enabled) and SwordTiming.furyScale() >= 1 then
 								if not armC0 then
 									armC0 = gameCamera.Viewmodel.RightHand.RightWrist.C0
 								end
@@ -9191,6 +9258,7 @@ run(function()
 		GrandFire.HoldTarget, GrandFire.HoldUntil = nil, 0
 		GrandLastSrv = 0
 		SwordTiming.resetGhost()
+		SwordTiming.furyRestore()
 	end
 
 	GrandKillaura = vape.Categories.Blatant:CreateModule({
@@ -9223,7 +9291,7 @@ run(function()
 					task.spawn(function()
 						local started = false
 						repeat
-							if GrandAttacking and not (GrandLegit and GrandLegit.Enabled) then
+							if GrandAttacking and not (GrandLegit and GrandLegit.Enabled) and SwordTiming.furyScale() >= 1 then
 								local okArm = pcall(function()
 									if not GrandArmC0 then
 										GrandArmC0 = gameCamera.Viewmodel.RightHand.RightWrist.C0
@@ -9372,7 +9440,7 @@ run(function()
 									switchItem(sword.tool, 0)
 								end
 
-								if not GrandSwing.Enabled and not GrandLegit.Enabled and not GrandAnimActive and not liveProj and not sword.tool.Name:find('summoner_claw') and tick() >= GrandFire.ItemUntil and (tick() - GrandLastAnimTime) >= math.max(GrandChargeTime.Value, 0.296) * SwordTiming.furyScale() then
+								if not GrandSwing.Enabled and not GrandLegit.Enabled and (not GrandAnimActive or SwordTiming.furyScale() < 1) and not liveProj and not sword.tool.Name:find('summoner_claw') and tick() >= GrandFire.ItemUntil and (tick() - GrandLastAnimTime) >= math.max(GrandChargeTime.Value, 0.296) * SwordTiming.furyScale() then
 									GrandLastAnimTime = tick()
 									if isOnTinker() then
 										playTinkerSwing()
