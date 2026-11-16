@@ -10154,8 +10154,45 @@ run(function()
 	local GreyPlayers
 	local savedProps = setmetatable({}, {__mode = 'k'})
 	local savedEffects = setmetatable({}, {__mode = 'k'})
+	local savedParents = setmetatable({}, {__mode = 'k'})
 	local savedPostFx = setmetatable({}, {__mode = 'k'})
+	local wasWhite = setmetatable({}, {__mode = 'k'})
+	local paintedByFlatten = setmetatable({}, {__mode = 'k'})
+	local flattenColor = setmetatable({}, {__mode = 'k'})
 	local GREY = Color3.fromRGB(163, 162, 165)
+
+	local materialColors = {
+		Grass = Color3.fromRGB(100, 127, 60),
+		LeafyGrass = Color3.fromRGB(95, 125, 58),
+		Sand = Color3.fromRGB(222, 205, 152),
+		Sandstone = Color3.fromRGB(190, 168, 120),
+		Wood = Color3.fromRGB(135, 96, 60),
+		WoodPlanks = Color3.fromRGB(160, 126, 88),
+		Brick = Color3.fromRGB(152, 78, 70),
+		Cobblestone = Color3.fromRGB(140, 140, 140),
+		Concrete = Color3.fromRGB(170, 170, 170),
+		Slate = Color3.fromRGB(112, 112, 112),
+		Granite = Color3.fromRGB(104, 104, 104),
+		Marble = Color3.fromRGB(190, 190, 190),
+		Basalt = Color3.fromRGB(66, 66, 70),
+		Rock = Color3.fromRGB(120, 120, 120),
+		Pebble = Color3.fromRGB(150, 150, 150),
+		Ground = Color3.fromRGB(102, 92, 80),
+		Mud = Color3.fromRGB(86, 66, 54),
+		Metal = Color3.fromRGB(170, 170, 173),
+		DiamondPlate = Color3.fromRGB(160, 160, 163),
+		CorrodedMetal = Color3.fromRGB(130, 120, 110),
+		Fabric = Color3.fromRGB(180, 180, 180),
+		Asphalt = Color3.fromRGB(80, 80, 80),
+		Snow = Color3.fromRGB(245, 245, 248),
+		Ice = Color3.fromRGB(185, 215, 235),
+		Glacier = Color3.fromRGB(160, 200, 220),
+		Glass = Color3.fromRGB(230, 230, 230),
+		Water = Color3.fromRGB(28, 100, 155),
+		Plastic = Color3.fromRGB(255, 255, 255),
+		SmoothPlastic = Color3.fromRGB(255, 255, 255),
+		Neon = Color3.fromRGB(255, 255, 255)
+	}
 
 	local effectClasses = {
 		ParticleEmitter = true,
@@ -10204,18 +10241,61 @@ run(function()
 		end
 	end
 
+	local function isNearWhite(color)
+		return color.R > 0.88 and color.G > 0.88 and color.B > 0.88
+	end
+
+	local function wasOriginallyWhite(part)
+		local flag = wasWhite[part]
+		if flag ~= nil then return flag end
+		return isNearWhite(part.Color)
+	end
+
+	local function flatten(inst)
+		wasWhite[inst] = isNearWhite(inst.Color)
+		local materialName = tostring(inst.Material):match('%.([%w]+)$')
+		if materialName == 'SmoothPlastic' then return end
+		local color = materialName and materialColors[materialName]
+		if not color then return end
+		remember(inst, 'Material')
+		inst.Material = Enum.Material.SmoothPlastic
+		if wasWhite[inst] then
+			remember(inst, 'Color')
+			inst.Color = color
+			paintedByFlatten[inst] = true
+			flattenColor[inst] = color
+		end
+	end
+
 	local function strip(inst)
 		if inst:IsA('BasePart') then
-			paint(inst)
-		elseif inst:IsA('Decal') then
-			if inst.Transparency < 1 then
-				remember(inst, 'Transparency')
-				inst.Transparency = 1
+			if not isCharacterPart(inst) then
+				flatten(inst)
 			end
+			paint(inst)
 		elseif effectClasses[inst.ClassName] and RemoveEffects and RemoveEffects.Enabled then
 			if inst.Enabled then
 				savedEffects[inst] = inst.Enabled
 				inst.Enabled = false
+			end
+		elseif not isCharacterPart(inst) then
+			if inst:IsA('Decal') then
+				if inst.Transparency < 1 then
+					remember(inst, 'Transparency')
+					inst.Transparency = 1
+				end
+			elseif inst:IsA('SurfaceAppearance') then
+				local part = inst.Parent
+				if part and part:IsA('BasePart') and not wasOriginallyWhite(part) then
+					savedParents[inst] = part
+					inst.Parent = nil
+				end
+			elseif inst:IsA('SpecialMesh') then
+				local part = inst.Parent
+				if inst.TextureId ~= '' and part and part:IsA('BasePart') and not wasOriginallyWhite(part) then
+					remember(inst, 'TextureId')
+					inst.TextureId = ''
+				end
 			end
 		end
 	end
@@ -10268,18 +10348,32 @@ run(function()
 				inst.Enabled = value
 			end)
 		end
+		for inst, parent in savedParents do
+			pcall(function()
+				inst.Parent = parent
+			end)
+		end
 		table.clear(savedProps)
 		table.clear(savedEffects)
+		table.clear(savedParents)
 		table.clear(savedPostFx)
+		table.clear(paintedByFlatten)
+		table.clear(flattenColor)
+		table.clear(wasWhite)
 	end
 
 	local function restoreColors(onlyCharacters)
 		for inst, props in savedProps do
 			if props.Color ~= nil and isCharacterPart(inst) == onlyCharacters then
+				local color = props.Color
+				if paintedByFlatten[inst] then
+					color = flattenColor[inst] or color
+				else
+					props.Color = nil
+				end
 				pcall(function()
-					inst.Color = props.Color
+					inst.Color = color
 				end)
-				props.Color = nil
 			end
 		end
 	end
@@ -10299,7 +10393,7 @@ run(function()
 
 	FpsBooster = vape.Categories.Render:CreateModule({
 		Name = 'FpsBooster',
-		Tooltip = 'Hides surface textures and effects to improve\nframes per second while keeping the map colours.',
+		Tooltip = 'Flattens the map into solid colours and hides\neffects to improve frames per second.',
 		Function = function(callback)
 			if callback then
 				applyLighting()
