@@ -3346,6 +3346,167 @@ run(function()
 end)
 
 run(function()
+	local ProjectileHitbox
+	local Targets
+	local Expand
+	local Visible
+	local objects = {}
+
+	local hitboxSize = Vector3.new(3, 6, 3)
+	local hitboxColor = Color3.fromRGB(255, 60, 180)
+
+	local function updateSize(val)
+		hitboxSize = Vector3.new(3, 6, 3) + Vector3.one * ((val or 0) / 5)
+		for _, part in pairs(objects) do
+			part.Size = hitboxSize
+		end
+	end
+
+	local function holdingProjectile()
+		local live = liveHandTool()
+		if live then return isProjectileTool(live) end
+		local hand = store.hand
+		return hand ~= nil and isProjectileTool(hand.tool)
+	end
+
+	local rayParams = RaycastParams.new()
+	rayParams.FilterType = Enum.RaycastFilterType.Exclude
+
+	local function behindWall(ent)
+		if not Targets or not Targets.Walls or not Targets.Walls.Enabled then return false end
+		if not ent.RootPart then return false end
+		if not entitylib.isAlive or not entitylib.character or not entitylib.character.RootPart then return false end
+		local origin = entitylib.character.RootPart.Position
+		local direction = ent.RootPart.Position - origin
+		rayParams.FilterDescendantsInstances = {entitylib.character, ent.Character}
+		local result = workspace:Raycast(origin, direction, rayParams)
+		return result ~= nil and (result.Position - origin).Magnitude < direction.Magnitude - 0.5
+	end
+
+	local function wanted(ent)
+		if not ent.Targetable or not ent.Character or not ent.RootPart then return false end
+		if not Targets then return false end
+		if ent.Player then
+			return Targets.Players ~= nil and Targets.Players.Enabled == true
+		end
+		return Targets.NPCs ~= nil and Targets.NPCs.Enabled == true
+	end
+
+	local function create(ent)
+		if objects[ent] then return end
+		if not wanted(ent) then return end
+		if behindWall(ent) then return end
+		local part = Instance.new('Part')
+		part.Name = 'ProjectileHitbox'
+		part.Archivable = false
+		part.Size = hitboxSize
+		part.CFrame = ent.RootPart.CFrame
+		part.CanCollide = false
+		part.CanTouch = false
+		part.Massless = true
+		part.Color = hitboxColor
+		part.Material = Enum.Material.Neon
+		part.Transparency = (Visible and Visible.Enabled) and 0.55 or 1
+		part.LocalTransparencyModifier = (Visible and Visible.Enabled) and 0 or 1
+		part.Parent = ent.Character
+		local weld = Instance.new('Motor6D')
+		weld.Part0 = ent.RootPart
+		weld.Part1 = part
+		weld.Parent = part
+		objects[ent] = part
+	end
+
+	local function clear()
+		for _, part in pairs(objects) do
+			part:Destroy()
+		end
+		table.clear(objects)
+		for _, plr in playersService:GetPlayers() do
+			local char = plr.Character
+			if char then
+				for _, old in char:GetChildren() do
+					if old.Name == 'ProjectileHitbox' then old:Destroy() end
+				end
+			end
+		end
+		for _, ent in entitylib.List do
+			local char = ent.Character
+			if char then
+				for _, old in char:GetChildren() do
+					if old.Name == 'ProjectileHitbox' then old:Destroy() end
+				end
+			end
+		end
+	end
+
+	ProjectileHitbox = vape.Categories.Combat:CreateModule({
+		Name = 'Projectile Hitbox',
+		Function = function(callback)
+			if callback then
+				if Expand then updateSize(Expand.Value) end
+				local frame = 0
+				ProjectileHitbox:Clean(runService.Heartbeat:Connect(function()
+					frame = frame + 1
+					if frame % 3 ~= 0 then return end
+					if not holdingProjectile() then
+						if next(objects) ~= nil then clear() end
+						return
+					end
+					for ent, part in pairs(objects) do
+						if not ent.Character or not ent.Character.Parent or not ent.RootPart then
+							part:Destroy()
+							objects[ent] = nil
+						else
+							part.Size = hitboxSize
+						end
+					end
+					local list = entitylib.List
+					for i = 1, #list do
+						create(list[i])
+					end
+				end))
+			else
+				clear()
+			end
+		end,
+		Tooltip = 'expands enemy hitboxes while a projectile is in hand'
+	})
+
+	Targets = ProjectileHitbox:CreateTargets({
+		Players = true,
+		NPCs = false,
+		Walls = false
+	})
+
+	Expand = ProjectileHitbox:CreateSlider({
+		Name = 'Expand amount',
+		Min = 0,
+		Max = 20,
+		Default = 6,
+		Decimal = 10,
+		Function = function(val)
+			updateSize(val)
+		end,
+		Suffix = function(val)
+			return val == 1 and 'stud' or 'studs'
+		end
+	})
+
+	Visible = ProjectileHitbox:CreateToggle({
+		Name = 'Visible',
+		Default = true,
+		Function = function(callback)
+			local transparency = callback and 0.55 or 1
+			local localMod = callback and 0 or 1
+			for _, part in pairs(objects) do
+				part.Transparency = transparency
+				part.LocalTransparencyModifier = localMod
+			end
+		end
+	})
+end)
+
+run(function()
 	local AimAssist
 	local Targets
 	local Sort
@@ -3368,16 +3529,20 @@ run(function()
 
 	local function getHeldProjectileMeta()
 		local tool = store.hand and store.hand.tool
-		local itemMeta = tool and bedwars.ItemMeta[tool.Name]
+		local itemMeta = tool and bedwars.ItemMeta and bedwars.ItemMeta[tool.Name]
 		local source = itemMeta and itemMeta.projectileSource
 		if not source or not source.projectileType then return nil end
 		local ammo = tool.Name
 		if source.ammoItemTypes and #source.ammoItemTypes > 0 then
 			ammo = nil
-			for _, item in store.inventory.inventory.items do
-				if table.find(source.ammoItemTypes, item.itemType) then
-					ammo = item.itemType
-					break
+			local inventory = store.inventory and store.inventory.inventory
+			local items = inventory and inventory.items
+			if items then
+				for _, item in items do
+					if table.find(source.ammoItemTypes, item.itemType) then
+						ammo = item.itemType
+						break
+					end
 				end
 			end
 		end
@@ -3387,7 +3552,7 @@ run(function()
 		if type(projType) == 'function' then
 			ok, projType = pcall(projType, ammo)
 		end
-		local projMeta = ok and projType and bedwars.ProjectileMeta[projType]
+		local projMeta = ok and projType and bedwars.ProjectileMeta and bedwars.ProjectileMeta[projType]
 		if projMeta and type(projMeta.launchVelocity) == 'number' then
 			return projMeta
 		end
@@ -3468,8 +3633,25 @@ run(function()
 				lastValidTime = 0
 				shakeTime = 0
 				local aimBindName = 'vapeAimAssist'
+				local shakeBindName = 'vapeAimAssistShake'
 				AimAssist:Clean(function()
 					pcall(function() runService:UnbindFromRenderStep(aimBindName) end)
+					pcall(function() runService:UnbindFromRenderStep(shakeBindName) end)
+				end)
+				runService:BindToRenderStep(shakeBindName, Enum.RenderPriority.Camera.Value + 2, function(dt)
+					if not ShakeToggle or not ShakeToggle.Enabled then return end
+					if not ShakeAmount or ShakeAmount.Value <= 0 then return end
+					local armed = store.hand ~= nil and store.hand.toolType == 'sword'
+					if not armed and WorkWithProjectiles and WorkWithProjectiles.Enabled then
+						armed = getHeldProjectileMeta() ~= nil
+					end
+					if not armed then return end
+					shakeTime = shakeTime + math.min(dt, 1 / 30)
+					local amp = math.rad(ShakeAmount.Value * 0.5)
+					local yaw = math.noise(shakeTime * 2.4, shakeSeed, 0) * amp
+					local pitch = math.noise(shakeSeed, shakeTime * 2.1, 0) * amp
+					local roll = math.noise(shakeTime * 1.3, shakeSeed * 0.7, 0) * amp * 0.4
+					gameCamera.CFrame = gameCamera.CFrame * CFrame.Angles(pitch, yaw, roll)
 				end)
 				runService:BindToRenderStep(aimBindName, Enum.RenderPriority.Camera.Value + 1, (function(dt)
 					dt = math.min(dt, 1 / 30)
@@ -3480,7 +3662,7 @@ run(function()
 					end
 
 					local projMeta
-					local validWeapon = store.hand.toolType == 'sword'
+					local validWeapon = store.hand ~= nil and store.hand.toolType == 'sword'
 					if WorkWithProjectiles and WorkWithProjectiles.Enabled and not validWeapon then
 						projMeta = getHeldProjectileMeta()
 						validWeapon = projMeta ~= nil
@@ -3661,15 +3843,6 @@ run(function()
 						end
 						local step = math.min(angle * alpha * ease, math.rad(600) * dt)
 						gameCamera.CFrame = camCF:Lerp(targetCFrame, step / angle)
-					end
-
-					if ShakeToggle and ShakeToggle.Enabled and ShakeAmount and ShakeAmount.Value > 0 then
-						shakeTime = shakeTime + dt
-						local amp = math.rad(ShakeAmount.Value * 0.5)
-						local yaw = math.noise(shakeTime * 2.4, shakeSeed, 0) * amp
-						local pitch = math.noise(shakeSeed, shakeTime * 2.1, 0) * amp
-						local roll = math.noise(shakeTime * 1.3, shakeSeed * 0.7, 0) * amp * 0.4
-						gameCamera.CFrame = gameCamera.CFrame * CFrame.Angles(pitch, yaw, roll)
 					end
 				end))
 			else
