@@ -6694,48 +6694,9 @@ run(function()
 		return Spacing, Scale, Gap, math.max(Speed - SwordTiming.CooldownCorrection, 0), Stock
 	end
 
-	-- Fixed cadence: 0.279 quantizes to 67/240 = 0.279167s, i.e. 17 frames at 60Hz.
-	-- The server drops a SwordHit that arrives inside the sword's own cooldown, so a send that is
-	-- not confirmed by damage is repeated a frame later instead of waiting a whole period. That
-	-- recovers the swings the server would otherwise discard and lands ~35 hits per 10s.
+	-- Killaura cadence: 0.279 quantizes to 67/240 = 0.279167s.
 	SwordTiming.Target = 0.279
 	SwordTiming.Budget = SwordTiming.Target
-
-	function SwordTiming.noteSend(target, retry)
-		SwordTiming.SentAt = workspace:GetServerTimeNow()
-		SwordTiming.SentTarget = target
-		SwordTiming.Confirmed = false
-		SwordTiming.Retries = retry and ((SwordTiming.Retries or 0) + 1) or 0
-	end
-
-	function SwordTiming.noteDamage(target)
-		if not SwordTiming.SentTarget or SwordTiming.Confirmed ~= false then return end
-		if target ~= SwordTiming.SentTarget then return end
-		SwordTiming.Confirmed = true
-		-- Rebase the cadence on the send the server actually took, so a retry does not leave
-		-- the next swing stuck on the stale tick that produced it.
-		SwordTiming.AcceptedAt = SwordTiming.SentAt
-		SwordTiming.NeedsRebase = true
-		SwordTiming.Retries = 0
-	end
-
-	function SwordTiming.retryReady(srvNow)
-		if SwordTiming.Confirmed ~= false then return false end
-		local sent = SwordTiming.SentAt
-		if type(sent) ~= 'number' then return false end
-		local since = srvNow - sent
-		if since < 0.014 or since > 0.07 then return false end
-		return (SwordTiming.Retries or 0) < 2
-	end
-
-	function SwordTiming.resetConfirm()
-		SwordTiming.SentAt = nil
-		SwordTiming.SentTarget = nil
-		SwordTiming.Confirmed = nil
-		SwordTiming.AcceptedAt = nil
-		SwordTiming.NeedsRebase = nil
-		SwordTiming.Retries = 0
-	end
 
 	function SwordTiming.furyScale()
 		local now = tick()
@@ -6864,12 +6825,6 @@ run(function()
 	local function quantize240(value)
 		return math.ceil(value / (1 / 240)) * (1 / 240)
 	end
-
-	vape:Clean(vapeEvents.EntityDamageEvent.Event:Connect(function(damageTable)
-		if damageTable.fromEntity ~= lplr.Character or damageTable.damageType ~= 0 then return end
-		if typeof(damageTable.entityInstance) ~= 'Instance' then return end
-		SwordTiming.noteDamage(damageTable.entityInstance)
-	end))
 
 	local function updatePreciseClock()
 		local now = tick()
@@ -8898,6 +8853,8 @@ run(function()
 	local GrandUpdateRate
 	local GrandAngle
 	local GrandMaxTargets
+	local GrandHitregMode
+	local GrandDynamicDelay
 	local GrandMouse
 	local GrandGUI
 	local GrandBoxSwingColor
@@ -8932,6 +8889,17 @@ run(function()
 	local GRAND_SERVER_REACH = 14.399
 	local GRAND_HIT_PERIOD = 0.29583333333333334
 
+	local function getGrandAttackDelay(meta)
+		local mode = (GrandHitregMode and GrandHitregMode.Value) or 'Stealth Mode'
+		local dynDelay = (GrandDynamicDelay and GrandDynamicDelay.Value) or 100
+		local Speed = meta.sword and meta.sword.attackSpeed or 0.3
+		local effectiveDelay = 50
+		if mode == 'Dynamic' then
+			effectiveDelay = dynDelay
+		end
+		return quantize240(SwordTiming.Calculate(Speed, 'Dynamic', effectiveDelay, 0, 35))
+	end
+
 	function GrandFire.projectileInHand()
 		local live = liveHandTool()
 		if live then return isProjectileTool(live) end
@@ -8946,19 +8914,6 @@ run(function()
 		if GrandFire.projectileInHand() then
 			GrandFire.ItemUntil = tick() + 0.15
 		end
-	end
-
-	function GrandFire.swordMeta()
-		local hand = store.hand
-		if hand and hand.tool and isMeleeWeapon(hand.tool.Name) then
-			local meta = bedwars.ItemMeta[hand.tool.Name]
-			if meta then return meta end
-		end
-		local sw = store.tools.sword
-		if sw and sw.tool then
-			return bedwars.ItemMeta[sw.tool.Name]
-		end
-		return nil
 	end
 
 	local function grandGetAttackData()
@@ -9128,7 +9083,7 @@ run(function()
 		return GrandFire.AcqRes
 	end
 
-	function GrandFire.attempt(retrying)
+	function GrandFire.attempt()
 		if fhBusy and (workspace:GetServerTimeNow() - (store._fhBusySince or 0)) < 0.10 then return false end
 		if lastProjectileTime > 0 and (workspace:GetServerTimeNow() - lastProjectileTime) < 0.075 then return false end
 
@@ -9150,21 +9105,14 @@ run(function()
 			return false
 		end
 
-		-- A retry is already past the last confirmed hit, so the fresh-swing guard only gates
-		-- the scheduled sends.
-		if not retrying and not SwordTiming.readyForHit(meta) then return false end
-
 		if not grandFireAttack(grandWeaponInstance(sword), tchar, selfPos, targetPos) then
 			return false
 		end
 
 		local srvNow = workspace:GetServerTimeNow()
-		SwordTiming.noteSend(tchar, retrying)
-		if not retrying then
-			GrandLastSrv = GrandLastSrv + GrandFire.Period
-			if GrandLastSrv < srvNow then
-				GrandLastSrv = srvNow
-			end
+		GrandLastSrv = GrandLastSrv + GrandFire.Period
+		if GrandLastSrv < srvNow then
+			GrandLastSrv = srvNow
 		end
 		store.attackReach = (dist * 100) // 1 / 100
 		store.attackReachUpdate = tick() + 1
@@ -9178,7 +9126,6 @@ run(function()
 		if GrandFire.Loop then return end
 
 		GrandFire.Period = GRAND_HIT_PERIOD
-		SwordTiming.resetConfirm()
 		GrandLastSrv = workspace:GetServerTimeNow() - GrandFire.Period
 		GrandFire.GraceTarget, GrandFire.GraceUntil = nil, 0
 		GrandFire.AcqTime, GrandFire.AcqRes = 0, nil
@@ -9191,22 +9138,15 @@ run(function()
 				runService.Heartbeat:Wait()
 				GrandFire.watchHand()
 
-				local meta = GrandFire.swordMeta()
-				if meta then
-					GrandFire.Period = getAttackDelay(meta)
+				local sword, meta = grandGetAttackData()
+				if sword and meta then
+					GrandFire.Period = getGrandAttackDelay(meta)
 				end
 
 				local heartbeatDt = 1 / 60
 				local target = GrandFire.Period - math.min(heartbeatDt * 0.5, GrandFire.Period * 0.06)
-				if SwordTiming.NeedsRebase then
-					SwordTiming.NeedsRebase = nil
-					GrandLastSrv = SwordTiming.AcceptedAt or GrandLastSrv
-				end
-				local srvNow = workspace:GetServerTimeNow()
-				if (srvNow - GrandLastSrv) >= target then
+				if (workspace:GetServerTimeNow() - GrandLastSrv) >= target then
 					pcall(GrandFire.attempt)
-				elseif SwordTiming.retryReady(srvNow) then
-					pcall(GrandFire.attempt, true)
 				end
 			end
 		end)
@@ -9223,7 +9163,6 @@ run(function()
 		GrandFire.LastSword = nil
 		GrandFire.HoldTarget, GrandFire.HoldUntil = nil, 0
 		GrandLastSrv = 0
-		SwordTiming.resetConfirm()
 	end
 
 	GrandKillaura = vape.Categories.Blatant:CreateModule({
@@ -9516,6 +9455,27 @@ run(function()
 		Min = 1,
 		Max = 5,
 		Default = 5
+	})
+	GrandHitregMode = GrandKillaura:CreateDropdown({
+		Name = 'Hitreg Mode',
+		List = {'Stealth Mode', 'Dynamic'},
+		Default = 'Stealth Mode',
+		Tooltip = 'GrandKillaura hit spacing mode',
+		Function = function(val)
+			if GrandDynamicDelay and GrandDynamicDelay.Object then
+				GrandDynamicDelay.Object.Visible = (val == 'Dynamic')
+			end
+		end
+	})
+	GrandDynamicDelay = GrandKillaura:CreateSlider({
+		Name = 'Dynamic Delay',
+		Min = 1,
+		Max = 100,
+		Default = 100,
+		Suffix = '%',
+		Darker = true,
+		Visible = false,
+		Tooltip = 'GrandKillaura hit spacing when Dynamic Hitreg Mode is selected'
 	})
 	GrandMouse = GrandKillaura:CreateToggle({Name = 'Require mouse down'})
 	GrandSwing = GrandKillaura:CreateToggle({Name = 'No Swing'})
