@@ -5452,7 +5452,6 @@ function mainapi:CreateCategory(categorysettings)
 		pinicon.Image = getcustomasset('aerov4/assets/new/star.png')
 		pinicon.ImageColor3 = color.Dark(uipallet.Text, 0.43)
 		pinicon.Parent = pinbutton
-		pinbutton.Parent = modulebutton
 
 		moduleapi.Pinned = false
 		moduleapi.FavoriteButton = nil
@@ -8668,12 +8667,6 @@ end))
 
 mainapi:CreateGUI()
 mainapi.Categories.Main:CreateDivider()
-mainapi:CreateCategory({
-	Name = 'Favorites',
-	Icon = getcustomasset('aerov4/assets/new/star.png'),
-	Size = UDim2.fromOffset(15, 15)
-})
-
 mainapi:CreateCategory({
 	Name = 'Combat',
 	Icon = getcustomasset('aerov4/assets/new/combaticon.png'),
