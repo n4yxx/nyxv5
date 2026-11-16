@@ -8800,26 +8800,10 @@ run(function()
 	local GRAND_SERVER_REACH = 14.399
 	local GRAND_HIT_PERIOD = 0.29583333333333334
 
-	function GrandFire.usingItem()
-		local hand = store.hand
-		if not hand or not hand.tool then return false end
-		if hand.toolType == 'bow' then return true end
-		local name = hand.tool.Name:lower()
-		if name:find('bow') or name:find('headhunter') or name:find('snowball')
-			or name:find('fireball') or name:find('gloop') or name:find('glue')
-			or name:find('chakram') or name:find('slingshot') then
-			return true
-		end
-		local meta = bedwars.ItemMeta and bedwars.ItemMeta[hand.tool.Name]
-		if meta and meta.projectileSource then return true end
-		return false
-	end
-
 	local function grandGetAttackData()
 		if not entitylib.isAlive then return false end
 		if not entitylib.character or not entitylib.character.RootPart then return false end
 		if not bedwars.SwordController or bedwars.SwordController.disableSwingState then return false end
-		if GrandFire.usingItem() then return false end
 
 		if GrandMouse and GrandMouse.Enabled and not inputService:IsMouseButtonPressed(Enum.UserInputType.MouseButton1) then
 			return false
@@ -8832,12 +8816,9 @@ run(function()
 			if ok and open then return false end
 		end
 
-		local sword = store.hand
-		if not sword or not sword.tool or (not isMeleeWeapon(sword.tool.Name) and not sword.tool.Name:find('summoner_claw')) then
-			sword = (GrandLimit and GrandLimit.Enabled) and nil or store.tools.sword
-		end
+		local sword = (GrandLimit and GrandLimit.Enabled) and store.hand or store.tools.sword
+		if not sword or not sword.tool then sword = store.hand end
 		if not sword or not sword.tool then return false end
-		if not isMeleeWeapon(sword.tool.Name) and not sword.tool.Name:find('summoner_claw') then return false end
 
 		if GrandLimit and GrandLimit.Enabled then
 			if not store.hand or store.hand.toolType ~= 'sword' then return false end
