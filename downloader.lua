@@ -7,13 +7,11 @@ local isfile = isfile or function(file)
 end
 local delfile = delfile or function(file) writefile(file, '') end
 
-local function downloadFile(path, func, useLatest)
-	if useLatest or not isfile(path) or readfile(path) == '' then
+local function downloadFile(path, func, forceRef)
+	if forceRef or not isfile(path) or readfile(path) == '' then
 		local suc, res = pcall(function()
-			local ref = useLatest and 'main' or readfile('aerov4/profiles/commit.txt')
-			local url = 'https://raw.githubusercontent.com/nyxv4/nyx1/'..ref..'/'..select(1, path:gsub('aerov4/', ''))
-			if useLatest then url = url..'?v='..tostring(os.time()) end
-			return game:HttpGet(url, true)
+			local ref = forceRef or readfile('aerov4/profiles/commit.txt')
+			return game:HttpGet('https://raw.githubusercontent.com/nyxv4/nyx1/'..ref..'/'..select(1, path:gsub('aerov4/', '')), true)
 		end)
 		if not suc or type(res) ~= 'string' or res == '' or res == '404: Not Found' then error(res) end
 		if path:find('%.lua') then
@@ -72,8 +70,10 @@ local function downloadPremadeProfiles(commit)
 	end
 end
 
+local commit
+local forceRef = 'main'
 if not shared.VapeDeveloper then
-	local commit = isfile('aerov4/profiles/commit.txt') and readfile('aerov4/profiles/commit.txt') or ''
+	commit = isfile('aerov4/profiles/commit.txt') and readfile('aerov4/profiles/commit.txt') or ''
 	local latest = isfile('aerov4/profiles/latest.txt') and readfile('aerov4/profiles/latest.txt') or ''
 	local ok, res = pcall(function()
 		return game:HttpGet('https://api.github.com/repos/nyxv4/nyx1/commits/main', true)
@@ -81,6 +81,7 @@ if not shared.VapeDeveloper then
 	local h = ok and res and res:match('"sha"%s*:%s*"(%x+)"')
 	if h and #h == 40 then
 		commit = h
+		forceRef = h
 		pcall(writefile, 'aerov4/profiles/latest.txt', h)
 	elseif #latest == 40 then
 		commit = latest
@@ -116,6 +117,6 @@ if not shared.VapeDeveloper then
 	end
 end
 
-return loadstring(downloadFile('aerov4/main.lua', nil, true), 'main')({
+return loadstring(downloadFile('aerov4/main.lua', nil, forceRef), 'main')({
 	Closet = _args.Closet,
 })

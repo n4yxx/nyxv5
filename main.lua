@@ -51,9 +51,9 @@ local function checkForUpdates()
 	local latest = ok and type(res) == 'string' and res:match('"sha"%s*:%s*"(%x+)"')
 	if not latest or #latest ~= 40 then
 		if current == '' then writefile('NYX/profiles/commit.txt', 'main') end
-		return
+		return nil
 	end
-	if latest == current then return end
+	if latest == current then return latest end
 	for _, folder in {'NYX', 'NYX/games', 'NYX/guis', 'NYX/libraries'} do
 		for _, file in listfiles(folder) do
 			if isfile(file) and readfile(file):sub(1, #watermark) == watermark then
@@ -63,10 +63,13 @@ local function checkForUpdates()
 	end
 	writefile('NYX/profiles/commit.txt', latest)
 	pcall(writefile, 'NYX/profiles/latest.txt', latest)
+	return latest
 end
 
+local latestCommit
 if not shared.VapeDeveloper then
-	pcall(checkForUpdates)
+	local ok, res = pcall(checkForUpdates)
+	if ok then latestCommit = res end
 end
 
 if identifyexecutor and table.find({'Madium', 'Medium'}, ({identifyexecutor()})[1]) then
@@ -98,22 +101,18 @@ local playersService = cloneref(game:GetService('Players'))
 local httpService = cloneref(game:GetService('HttpService'))
 local teleportService = cloneref(game:GetService('TeleportService'))
 
-local function downloadFile(path, func, useLatest)
-	if useLatest or not isfile(path) or readfile(path) == '' then
+local function downloadFile(path, func, forceRef)
+	if forceRef or not isfile(path) or readfile(path) == '' then
 		local res
 		local success = false
 		for attempt = 1, 3 do
 			local suc, result = pcall(function()
-				local commit
-				if useLatest then
-					commit = 'main'
-				else
+				local commit = forceRef
+				if commit == nil or commit == '' then
 					commit = isfile('NYX/profiles/commit.txt') and readfile('NYX/profiles/commit.txt')
-					if commit == nil or commit == '' then commit = 'main' end
 				end
-				local url = 'https://raw.githubusercontent.com/nyxv4/nyx1/' .. commit .. '/' .. select(1, path:gsub('^NYX/', ''))
-				if useLatest then url = url .. '?v=' .. tostring(os.time()) end
-				return game:HttpGet(url, true)
+				if commit == nil or commit == '' then commit = 'main' end
+				return game:HttpGet('https://raw.githubusercontent.com/nyxv4/nyx1/' .. commit .. '/' .. select(1, path:gsub('^NYX/', '')), true)
 			end)
 			if suc and type(result) == 'string' and #result > 0 and result ~= '404: Not Found' then
 				res = result
@@ -246,7 +245,7 @@ local guiPath = 'NYX/guis/' .. gui .. '.lua'
 local guiSource = isfile(guiPath) and readfile(guiPath) or ''
 if type(guiSource) ~= 'string' or not guiSource:find('--NYXBUILD:', 1, true) then
 	pcall(delfile, guiPath)
-	guiSource = downloadFile(guiPath, nil, true)
+	guiSource = downloadFile(guiPath, nil, latestCommit or 'main')
 else
 	guiSource = downloadFile(guiPath)
 end

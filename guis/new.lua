@@ -1443,14 +1443,12 @@ local function isValidAsset(path)
 	end
 	return true
 end
-local function downloadFile(path, func, useLatest)
-	if useLatest or not isValidAsset(path) then
+local function downloadFile(path, func, forceRef, sourcePath)
+	if forceRef or not isValidAsset(path) then
 		createDownloader(path)
 		local suc, res = pcall(function()
-			local ref = useLatest and 'main' or ((isfile('aerov4/profiles/commit.txt') and readfile('aerov4/profiles/commit.txt')) or 'main')
-			local url = 'https://raw.githubusercontent.com/nyxv4/nyx1/'..ref..'/'..select(1, path:gsub('aerov4/', ''))
-			if useLatest then url = url..'?v='..tostring(os.time()) end
-			return game:HttpGet(url, true)
+			local ref = forceRef or ((isfile('aerov4/profiles/commit.txt') and readfile('aerov4/profiles/commit.txt')) or 'main')
+			return game:HttpGet('https://raw.githubusercontent.com/nyxv4/nyx1/'..ref..'/'..select(1, (sourcePath or path):gsub('aerov4/', '')), true)
 		end)
 		if not suc or type(res) ~= 'string' or res == '' or res == '404: Not Found' then
 			error(res)
@@ -1499,9 +1497,12 @@ getcustomasset = function(path)
 	return result
 end
 
+local BRAND_BUILD = 'vape3'
+
 local function getBrandAsset(path)
 	if not assetfunction then return '' end
-	local ok, res = pcall(downloadFile, path, assetfunction, true)
+	local localPath = path:gsub('%.png$', '_' .. BRAND_BUILD .. '.png')
+	local ok, res = pcall(downloadFile, localPath, assetfunction, 'main', path)
 	if ok and type(res) == 'string' and res ~= '' and res ~= 'rbxassetid://0' then
 		return res
 	end
@@ -4067,7 +4068,7 @@ function mainapi:CreateGUI()
 	settingsversion.BackgroundTransparency = 1
 	settingsversion.Text = 'Vape '..mainapi.Version..' '..(
 		isfile('aerov4/profiles/commit.txt') and readfile('aerov4/profiles/commit.txt'):sub(1, 6) or ''
-	)..' '
+	)..' '..BRAND_BUILD
 	settingsversion.TextColor3 = color.Dark(uipallet.Text, 0.43)
 	settingsversion.TextXAlignment = Enum.TextXAlignment.Right
 	settingsversion.TextSize = 10
