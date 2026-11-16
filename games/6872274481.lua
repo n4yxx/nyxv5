@@ -10150,10 +10150,13 @@ end)
 run(function()
 	local FpsBooster
 	local RemoveEffects
+	local NoColour
+	local GreyPlayers
 	local savedProps = setmetatable({}, {__mode = 'k'})
 	local savedEffects = setmetatable({}, {__mode = 'k'})
 	local savedParents = setmetatable({}, {__mode = 'k'})
 	local savedPostFx = setmetatable({}, {__mode = 'k'})
+	local GREY = Color3.fromRGB(163, 162, 165)
 
 	local effectClasses = {
 		ParticleEmitter = true,
@@ -10184,12 +10187,31 @@ run(function()
 		end
 	end
 
+	local function isCharacterPart(inst)
+		local model = inst:FindFirstAncestorOfClass('Model')
+		return model ~= nil and model:FindFirstChildOfClass('Humanoid') ~= nil
+	end
+
+	local function paint(inst)
+		local noColour = NoColour and NoColour.Enabled
+		local greyPlayers = GreyPlayers and GreyPlayers.Enabled
+		if not (noColour or greyPlayers) then return end
+		local characterPart = isCharacterPart(inst)
+		if (characterPart and greyPlayers) or (not characterPart and noColour) then
+			if inst.Color ~= GREY then
+				remember(inst, 'Color')
+				inst.Color = GREY
+			end
+		end
+	end
+
 	local function strip(inst)
 		if inst:IsA('BasePart') then
 			if inst.Material ~= Enum.Material.SmoothPlastic then
 				remember(inst, 'Material')
 				inst.Material = Enum.Material.SmoothPlastic
 			end
+			paint(inst)
 		elseif inst:IsA('Decal') then
 			if inst.Transparency < 1 then
 				remember(inst, 'Transparency')
@@ -10217,13 +10239,9 @@ run(function()
 		local lighting = game:GetService('Lighting')
 		for prop, value in pairs({
 			GlobalShadows = false,
-			Brightness = 2,
-			Ambient = Color3.fromRGB(178, 178, 178),
-			OutdoorAmbient = Color3.fromRGB(255, 255, 255),
 			EnvironmentDiffuseScale = 0,
 			EnvironmentSpecularScale = 0,
-			ShadowSoftness = 0,
-			ClockTime = 14
+			ShadowSoftness = 0
 		}) do
 			remember(lighting, prop)
 			pcall(function()
@@ -10231,14 +10249,9 @@ run(function()
 			end)
 		end
 		for _, inst in lighting:GetChildren() do
-			if postFx[inst.ClassName] then
-				if inst.Enabled then
-					savedPostFx[inst] = inst.Enabled
-					inst.Enabled = false
-				end
-			elseif inst:IsA('Atmosphere') then
-				remember(inst, 'Density')
-				inst.Density = 0
+			if postFx[inst.ClassName] and inst.Enabled then
+				savedPostFx[inst] = inst.Enabled
+				inst.Enabled = false
 			end
 		end
 		pcall(function()
@@ -10279,6 +10292,17 @@ run(function()
 		table.clear(savedEffects)
 		table.clear(savedParents)
 		table.clear(savedPostFx)
+	end
+
+	local function restoreColors(onlyCharacters)
+		for inst, props in savedProps do
+			if props.Color ~= nil and isCharacterPart(inst) == onlyCharacters then
+				pcall(function()
+					inst.Color = props.Color
+				end)
+				props.Color = nil
+			end
+		end
 	end
 
 	local function sweepAll()
@@ -10325,6 +10349,32 @@ run(function()
 		end
 	})
 	RemoveEffects:Toggle()
+
+	NoColour = FpsBooster:CreateToggle({
+		Name = 'NoColour',
+		Tooltip = 'Paint the map grey',
+		Function = function(callback)
+			if not FpsBooster.Enabled then return end
+			if callback then
+				sweepAll()
+			else
+				restoreColors(false)
+			end
+		end
+	})
+
+	GreyPlayers = FpsBooster:CreateToggle({
+		Name = 'Grey players',
+		Tooltip = 'Paint player avatars grey',
+		Function = function(callback)
+			if not FpsBooster.Enabled then return end
+			if callback then
+				sweepAll()
+			else
+				restoreColors(true)
+			end
+		end
+	})
 end)
 
 run(function()
