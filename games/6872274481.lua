@@ -671,8 +671,13 @@ local function switchItem(tool, delayTime)
 	delayTime = delayTime or 0.05
 	local check = lplr.Character and lplr.Character:FindFirstChild('HandInvItem') or nil
 	if check and check.Value ~= tool and tool.Parent ~= nil then
+		store._equipPending = true
+		store._equipSince = tick()
 		task.spawn(function()
-			bedwars.Client:Get(remotes.EquipItem):CallServerAsync({hand = tool})
+			pcall(function()
+				bedwars.Client:Get(remotes.EquipItem):CallServerAsync({hand = tool})
+			end)
+			store._equipPending = false
 		end)
 		check.Value = tool
 		if delayTime > 0 then
@@ -8792,13 +8797,35 @@ run(function()
 		Period = 0.29583333333333334,
 		GraceUntil = 0,
 		AcqTime = 0,
-		ScanTime = 0
+		ScanTime = 0,
+		ItemUntil = 0,
+		LastSword = nil
 	}
 	local GrandAnimTween
 	local GrandArmC0
 	local GrandAnimActive = false
 	local GRAND_SERVER_REACH = 14.399
 	local GRAND_HIT_PERIOD = 0.29583333333333334
+
+	function GrandFire.projectileInHand()
+		local hand = store.hand
+		if not hand or not hand.tool then return false end
+		if hand.toolType == 'bow' then return true end
+		local name = hand.tool.Name:lower()
+		if name:find('bow') or name:find('headhunter') or name:find('snowball')
+			or name:find('fireball') or name:find('gloop') or name:find('glue')
+			or name:find('chakram') or name:find('slingshot') then
+			return true
+		end
+		local meta = bedwars.ItemMeta and bedwars.ItemMeta[hand.tool.Name]
+		return (meta and meta.projectileSource) and true or false
+	end
+
+	function GrandFire.watchHand()
+		if GrandFire.projectileInHand() then
+			GrandFire.ItemUntil = tick() + 0.15
+		end
+	end
 
 	local function grandGetAttackData()
 		if not entitylib.isAlive then return false end
@@ -8816,8 +8843,10 @@ run(function()
 			if ok and open then return false end
 		end
 
-		local sword = (GrandLimit and GrandLimit.Enabled) and store.hand or store.tools.sword
-		if not sword or not sword.tool then sword = store.hand end
+		local sword = store.hand
+		if not sword or not sword.tool or not isMeleeWeapon(sword.tool.Name) then
+			sword = (GrandLimit and GrandLimit.Enabled) and nil or store.tools.sword
+		end
 		if not sword or not sword.tool then return false end
 
 		if GrandLimit and GrandLimit.Enabled then
@@ -8951,12 +8980,15 @@ run(function()
 	function GrandFire.attempt()
 		if fhBusy and (workspace:GetServerTimeNow() - (store._fhBusySince or 0)) < 0.10 then return false end
 		if lastProjectileTime > 0 and (workspace:GetServerTimeNow() - lastProjectileTime) < 0.075 then return false end
+		if tick() < GrandFire.ItemUntil then return false end
+		if store._equipPending and (tick() - (store._equipSince or 0)) < 0.75 then return false end
 
 		local v = GrandFire.resolveTarget()
 		if not v then return false end
 
 		local sword, meta = grandGetAttackData()
 		if not sword or not meta then return false end
+		if store.hand and store.hand.tool and store.hand.toolType ~= 'sword' and not isMeleeWeapon(store.hand.tool.Name) then return false end
 
 		local tchar = v.Character
 		if not tchar or not tchar.PrimaryPart then return false end
@@ -8994,10 +9026,13 @@ run(function()
 		GrandLastSrv = workspace:GetServerTimeNow() - GrandFire.Period
 		GrandFire.GraceTarget, GrandFire.GraceUntil = nil, 0
 		GrandFire.AcqTime, GrandFire.AcqRes = 0, nil
+		GrandFire.ItemUntil = 0
+		GrandFire.LastSword = nil
 
 		GrandFire.Loop = task.spawn(function()
 			while GrandKillaura and GrandKillaura.Enabled do
 				runService.Heartbeat:Wait()
+				GrandFire.watchHand()
 
 				local sword, meta = grandGetAttackData()
 				if sword and meta then
@@ -9022,6 +9057,8 @@ run(function()
 		end
 		GrandFire.GraceTarget, GrandFire.GraceUntil = nil, 0
 		GrandFire.AcqTime, GrandFire.AcqRes = 0, nil
+		GrandFire.ItemUntil = 0
+		GrandFire.LastSword = nil
 		GrandLastSrv = 0
 	end
 
@@ -9033,6 +9070,7 @@ run(function()
 				GrandAttacking = false
 				GrandLastAnimTime = 0
 				GrandFire.ScanCache, GrandFire.ScanTime = nil, 0
+				resetSwordCooldown()
 				GrandFire.start()
 
 				if inputService.TouchEnabled then
@@ -9115,6 +9153,10 @@ run(function()
 
 					local attacked = {}
 					if sword then
+						if GrandFire.LastSword ~= sword.tool.Name then
+							GrandFire.LastSword = sword.tool.Name
+							resetSwordCooldown()
+						end
 						local now = tick()
 						if not GrandFire.ScanCache or (now - GrandFire.ScanTime) >= 0.05 then
 							local avoidTarget = (Killaura and Killaura.Enabled) and store.KillauraTarget or nil
@@ -9180,12 +9222,12 @@ run(function()
 							store.GrandKillauraTarget = chosen
 
 							if hasValidSwing then
-								if not fhBusy and not regentBusy and store.hand and store.hand.tool ~= sword.tool and (tick() - (store._kaSwitch or 0)) > 0.25 then
+								if not fhBusy and not regentBusy and store.hand and store.hand.tool ~= sword.tool and (tick() - (store._kaSwitch or 0)) > 0.25 and tick() >= GrandFire.ItemUntil then
 									store._kaSwitch = tick()
 									switchItem(sword.tool, 0)
 								end
 
-								if not GrandSwing.Enabled and not GrandLegit.Enabled and not GrandAnimActive and not sword.tool.Name:find('summoner_claw') and (tick() - GrandLastAnimTime) >= math.max(GrandChargeTime.Value, 0.296) then
+								if not GrandSwing.Enabled and not GrandLegit.Enabled and not GrandAnimActive and not sword.tool.Name:find('summoner_claw') and tick() >= GrandFire.ItemUntil and (tick() - GrandLastAnimTime) >= math.max(GrandChargeTime.Value, 0.296) then
 									GrandLastAnimTime = tick()
 									if isOnTinker() then
 										playTinkerSwing()
