@@ -10252,14 +10252,23 @@ run(function()
 	end
 
 	local function flatten(inst)
-		wasWhite[inst] = isNearWhite(inst.Color)
+		local white = isNearWhite(inst.Color)
+		wasWhite[inst] = white
+		local hasVariant = inst.MaterialVariant ~= ''
+		if white and hasVariant then
+			return
+		end
+		if hasVariant then
+			remember(inst, 'MaterialVariant')
+			inst.MaterialVariant = ''
+		end
 		local materialName = tostring(inst.Material):match('%.([%w]+)$')
 		if materialName == 'SmoothPlastic' then return end
 		local color = materialName and materialColors[materialName]
 		if not color then return end
 		remember(inst, 'Material')
 		inst.Material = Enum.Material.SmoothPlastic
-		if wasWhite[inst] then
+		if white then
 			remember(inst, 'Color')
 			inst.Color = color
 			paintedByFlatten[inst] = true
