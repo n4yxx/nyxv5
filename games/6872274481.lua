@@ -10154,7 +10154,6 @@ run(function()
 	local GreyPlayers
 	local savedProps = setmetatable({}, {__mode = 'k'})
 	local savedEffects = setmetatable({}, {__mode = 'k'})
-	local savedParents = setmetatable({}, {__mode = 'k'})
 	local savedPostFx = setmetatable({}, {__mode = 'k'})
 	local GREY = Color3.fromRGB(163, 162, 165)
 
@@ -10207,25 +10206,11 @@ run(function()
 
 	local function strip(inst)
 		if inst:IsA('BasePart') then
-			if inst.Material ~= Enum.Material.SmoothPlastic then
-				remember(inst, 'Material')
-				inst.Material = Enum.Material.SmoothPlastic
-			end
 			paint(inst)
 		elseif inst:IsA('Decal') then
 			if inst.Transparency < 1 then
 				remember(inst, 'Transparency')
 				inst.Transparency = 1
-			end
-		elseif inst:IsA('SurfaceAppearance') then
-			if inst.Parent then
-				savedParents[inst] = inst.Parent
-				inst.Parent = nil
-			end
-		elseif inst:IsA('SpecialMesh') then
-			if inst.TextureId ~= '' then
-				remember(inst, 'TextureId')
-				inst.TextureId = ''
 			end
 		elseif effectClasses[inst.ClassName] and RemoveEffects and RemoveEffects.Enabled then
 			if inst.Enabled then
@@ -10273,11 +10258,6 @@ run(function()
 				end)
 			end
 		end
-		for inst, parent in savedParents do
-			pcall(function()
-				inst.Parent = parent
-			end)
-		end
 		for inst, value in savedEffects do
 			pcall(function()
 				inst.Enabled = value
@@ -10290,7 +10270,6 @@ run(function()
 		end
 		table.clear(savedProps)
 		table.clear(savedEffects)
-		table.clear(savedParents)
 		table.clear(savedPostFx)
 	end
 
@@ -10320,7 +10299,7 @@ run(function()
 
 	FpsBooster = vape.Categories.Render:CreateModule({
 		Name = 'FpsBooster',
-		Tooltip = 'Flattens the map, strips textures and effects\nto improve frames per second.',
+		Tooltip = 'Hides surface textures and effects to improve\nframes per second while keeping the map colours.',
 		Function = function(callback)
 			if callback then
 				applyLighting()
