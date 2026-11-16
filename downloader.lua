@@ -1,5 +1,6 @@
 local _args = ...
 if type(_args) ~= "table" then _args = {} end
+local pinnedCommit = _args.Commit
 
 local isfile = isfile or function(file)
 	local suc, res = pcall(function() return readfile(file) end)
@@ -71,7 +72,7 @@ local function downloadPremadeProfiles(commit)
 end
 
 local commit
-local forceRef = 'main'
+local forceRef = pinnedCommit or 'main'
 if not shared.VapeDeveloper then
 	commit = isfile('aerov4/profiles/commit.txt') and readfile('aerov4/profiles/commit.txt') or ''
 	local latest = isfile('aerov4/profiles/latest.txt') and readfile('aerov4/profiles/latest.txt') or ''
@@ -81,7 +82,7 @@ if not shared.VapeDeveloper then
 	local h = ok and res and res:match('"sha"%s*:%s*"(%x+)"')
 	if h and #h == 40 then
 		commit = h
-		forceRef = h
+		forceRef = pinnedCommit or h
 		pcall(writefile, 'aerov4/profiles/latest.txt', h)
 	elseif #latest == 40 then
 		commit = latest
