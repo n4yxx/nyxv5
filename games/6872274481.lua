@@ -10170,6 +10170,186 @@ end)
 ]]
 
 run(function()
+	local FpsBooster
+	local RemoveEffects
+	local savedProps = setmetatable({}, {__mode = 'k'})
+	local savedEffects = setmetatable({}, {__mode = 'k'})
+	local savedParents = setmetatable({}, {__mode = 'k'})
+	local savedPostFx = setmetatable({}, {__mode = 'k'})
+
+	local effectClasses = {
+		ParticleEmitter = true,
+		Smoke = true,
+		Fire = true,
+		Sparkles = true,
+		Beam = true,
+		Trail = true
+	}
+
+	local postFx = {
+		BloomEffect = true,
+		DepthOfFieldEffect = true,
+		SunRaysEffect = true,
+		ColorCorrectionEffect = true,
+		BlurEffect = true,
+		ColorGradingEffect = true
+	}
+
+	local function remember(inst, prop)
+		local props = savedProps[inst]
+		if not props then
+			props = {}
+			savedProps[inst] = props
+		end
+		if props[prop] == nil then
+			props[prop] = inst[prop]
+		end
+	end
+
+	local function strip(inst)
+		if inst:IsA('BasePart') then
+			if inst.Material ~= Enum.Material.SmoothPlastic then
+				remember(inst, 'Material')
+				inst.Material = Enum.Material.SmoothPlastic
+			end
+		elseif inst:IsA('Decal') then
+			if inst.Transparency < 1 then
+				remember(inst, 'Transparency')
+				inst.Transparency = 1
+			end
+		elseif inst:IsA('SurfaceAppearance') then
+			if inst.Parent then
+				savedParents[inst] = inst.Parent
+				inst.Parent = nil
+			end
+		elseif inst:IsA('SpecialMesh') then
+			if inst.TextureId ~= '' then
+				remember(inst, 'TextureId')
+				inst.TextureId = ''
+			end
+		elseif effectClasses[inst.ClassName] and RemoveEffects and RemoveEffects.Enabled then
+			if inst.Enabled then
+				savedEffects[inst] = inst.Enabled
+				inst.Enabled = false
+			end
+		end
+	end
+
+	local function applyLighting()
+		local lighting = game:GetService('Lighting')
+		for prop, value in pairs({
+			GlobalShadows = false,
+			Brightness = 2,
+			Ambient = Color3.fromRGB(178, 178, 178),
+			OutdoorAmbient = Color3.fromRGB(255, 255, 255),
+			EnvironmentDiffuseScale = 0,
+			EnvironmentSpecularScale = 0,
+			ShadowSoftness = 0,
+			ClockTime = 14
+		}) do
+			remember(lighting, prop)
+			pcall(function()
+				lighting[prop] = value
+			end)
+		end
+		for _, inst in lighting:GetChildren() do
+			if postFx[inst.ClassName] then
+				if inst.Enabled then
+					savedPostFx[inst] = inst.Enabled
+					inst.Enabled = false
+				end
+			elseif inst:IsA('Atmosphere') then
+				remember(inst, 'Density')
+				inst.Density = 0
+			end
+		end
+		pcall(function()
+			local terrain = workspace.Terrain
+			remember(terrain, 'Decoration')
+			terrain.Decoration = false
+			remember(terrain, 'WaterWaveSize')
+			terrain.WaterWaveSize = 0
+			remember(terrain, 'WaterWaveSpeed')
+			terrain.WaterWaveSpeed = 0
+		end)
+	end
+
+	local function restoreAll()
+		for inst, props in savedProps do
+			for prop, value in props do
+				pcall(function()
+					inst[prop] = value
+				end)
+			end
+		end
+		for inst, parent in savedParents do
+			pcall(function()
+				inst.Parent = parent
+			end)
+		end
+		for inst, value in savedEffects do
+			pcall(function()
+				inst.Enabled = value
+			end)
+		end
+		for inst, value in savedPostFx do
+			pcall(function()
+				inst.Enabled = value
+			end)
+		end
+		table.clear(savedProps)
+		table.clear(savedEffects)
+		table.clear(savedParents)
+		table.clear(savedPostFx)
+	end
+
+	local function sweepAll()
+		task.spawn(function()
+			local list = workspace:GetDescendants()
+			for index = 1, #list, 500 do
+				if not FpsBooster.Enabled then return end
+				for i = index, math.min(index + 499, #list) do
+					strip(list[i])
+				end
+				task.wait()
+			end
+		end)
+	end
+
+	FpsBooster = vape.Categories.Render:CreateModule({
+		Name = 'FpsBooster',
+		Tooltip = 'Flattens the map, strips textures and effects\nto improve frames per second.',
+		Function = function(callback)
+			if callback then
+				applyLighting()
+				FpsBooster:Clean(workspace.DescendantAdded:Connect(strip))
+				sweepAll()
+			else
+				restoreAll()
+			end
+		end
+	})
+
+	RemoveEffects = FpsBooster:CreateToggle({
+		Name = 'Remove effects',
+		Tooltip = 'Hide particles, trails and beams',
+		Function = function(callback)
+			if not FpsBooster.Enabled then return end
+			if callback then
+				sweepAll()
+			else
+				for inst, value in savedEffects do
+					pcall(function()
+						inst.Enabled = value
+					end)
+				end
+			end
+		end
+	})
+	RemoveEffects:Toggle()
+end)
+
+run(function()
     local SetPlayerLevel
     local originalLevel = nil
     local customLevel = 1
