@@ -6694,22 +6694,14 @@ run(function()
 		return Spacing, Scale, Gap, math.max(Speed - SwordTiming.CooldownCorrection, 0), Stock
 	end
 
-	-- Same attack budget catvape derives from the game's own SwordHit rate limit.
-	-- Sending faster than this only produces hits the server throws away (ghosts).
-	SwordTiming.Budget = SwordTiming.HitFloor
+	-- Pinned cadence: 0.279 quantizes to 67/240 = 0.279167s, i.e. ~35.8 hits per 10s.
+	-- GhostDelay still adds slack on its own if the server starts dropping sends.
+	SwordTiming.Target = 0.279
+	SwordTiming.Budget = SwordTiming.Target
 	SwordTiming.GhostDelay = 0
 	SwordTiming.GhostHold = 0
 	SwordTiming.GhostSeen = false
 	SwordTiming.Pending = {}
-
-	function SwordTiming.refreshBudget()
-		local ok, rate = pcall(function()
-			return bedwars.Handler:Get('SwordHit'):GetRateLimit()
-		end)
-		if ok and type(rate) == 'number' and rate > 0 then
-			SwordTiming.Budget = math.clamp(60 / rate, 0.24, 0.6)
-		end
-	end
 
 	function SwordTiming.furyScale()
 		local now = tick()
@@ -6785,14 +6777,17 @@ run(function()
 	end
 
 	-- catvape's guard: never send sooner than the sword's own attack speed after ANY
-	-- registered attack (ours or the game's), or the server drops the packet.
+	-- registered attack (ours or the game's), or the server drops the packet. Capped by the
+	-- hit budget so the fire loop's early tick is not rejected and the cadence holds.
 	function SwordTiming.readyForHit(meta)
 		local last = bedwars.SwordController and bedwars.SwordController.lastAttack
 		if type(last) ~= 'number' or last <= 0 then return true end
 		local delta = workspace:GetServerTimeNow() - last
 		if delta < 0 or delta > 1 then return true end
-		local speed = ((meta and meta.sword and meta.sword.attackSpeed) or 0.3) * SwordTiming.furyScale()
-		return delta >= math.max(speed - SwordTiming.CooldownCorrection, 0)
+		local fury = SwordTiming.furyScale()
+		local speed = ((meta and meta.sword and meta.sword.attackSpeed) or 0.3) * fury
+		local limit = math.min(math.max(speed - SwordTiming.CooldownCorrection, 0), (SwordTiming.Budget or SwordTiming.Target) * fury)
+		return delta >= math.max(limit - 0.015, 0)
 	end
 
 	-- Mirrors the game's own swing: the weapon's third-person animation on the character
@@ -8275,7 +8270,6 @@ run(function()
 	local function startKillauraFireLoop()
 		if killauraFireLoop then return end
 
-		SwordTiming.refreshBudget()
 		SwordTiming.resetGhost()
 		kaPeriod = HIT_PERIOD
 		animPeriod = NORMAL_SWORD_SWING_SPEED
@@ -9193,7 +9187,6 @@ run(function()
 		if GrandFire.Loop then return end
 
 		GrandFire.Period = GRAND_HIT_PERIOD
-		SwordTiming.refreshBudget()
 		SwordTiming.resetGhost()
 		GrandLastSrv = workspace:GetServerTimeNow() - GrandFire.Period
 		GrandFire.GraceTarget, GrandFire.GraceUntil = nil, 0

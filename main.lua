@@ -1,5 +1,9 @@
 repeat task.wait() until game:IsLoaded()
-if shared.vape then shared.vape:Uninject() end
+if type(setthreadidentity) == 'function' then
+	getgenv().NYXSetIdentity = setthreadidentity
+	shared.NYXSetIdentity = setthreadidentity
+end
+if shared.vape then pcall(function() shared.vape:Uninject() end) end
 
 local LOADER_URL = "https://raw.githubusercontent.com/nyxv4/nyx1/main/downloader.lua" 
 local _initArgs = ...
@@ -262,7 +266,7 @@ if not isfolder('NYX/assets/' .. gui) then
 end
 
 local guiPath = 'NYX/guis/' .. gui .. '.lua'
-local guiBuild = '--NYXBUILD:nyx5'
+local guiBuild = '--NYXBUILD:nyx6'
 local guiSource = isfile(guiPath) and readfile(guiPath) or ''
 if type(guiSource) ~= 'string' or not guiSource:find(guiBuild, 1, true) then
 	pcall(delfile, guiPath)

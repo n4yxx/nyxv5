@@ -1,4 +1,16 @@
---NYXBUILD:nyx5
+--NYXBUILD:nyx6
+-- Some executors run the teardown thread at an identity where Instance is not allowed, so
+-- attempts to free module objects throw 'lacking capability'. Keep the original setter around.
+local function raiseThreadIdentity()
+	local raiser = setthreadidentity
+	if type(raiser) ~= 'function' then
+		local env = getgenv()
+		raiser = env and env.NYXSetIdentity or (shared and shared.NYXSetIdentity)
+	end
+	if type(raiser) == 'function' then
+		pcall(raiser, 8)
+	end
+end
 local mainapi = {
 	Categories = {},
 	GUIColor = {
@@ -8401,22 +8413,23 @@ function mainapi:Uninject()
         end
         getgenv()._vape_originals = nil
     end
-    if mainapi.ThreadFix then setthreadidentity(8) end
-    mainapi:Save()
+    raiseThreadIdentity()
+    if mainapi.ThreadFix then pcall(setthreadidentity, 8) end
+    pcall(mainapi.Save, mainapi)
     mainapi.Loaded = nil
 	for _, v in self.Modules do
 		if v.Enabled then
-			v:Toggle()
+			pcall(v.Toggle, v)
 		end
 	end
 	for _, v in self.Legit.Modules do
 		if v.Enabled then
-			v:Toggle()
+			pcall(v.Toggle, v)
 		end
 	end
 	for _, v in self.Categories do
 		if v.Type == 'Overlay' and v.Button.Enabled then
-			v.Button:Toggle()
+			pcall(v.Button.Toggle, v.Button)
 		end
 	end
 	for _, v in mainapi.Connections do
@@ -8425,12 +8438,14 @@ function mainapi:Uninject()
 		end)
 	end
 	if mainapi.ThreadFix then
-		setthreadidentity(8)
+		pcall(setthreadidentity, 8)
 		clickgui.Visible = false
 		mainapi:BlurCheck()
 	end
-	mainapi.gui:ClearAllChildren()
-	mainapi.gui:Destroy()
+	pcall(function()
+		mainapi.gui:ClearAllChildren()
+		mainapi.gui:Destroy()
+	end)
 	table.clear(mainapi.Libraries)
 	loopClean(mainapi)
 	mainapi.Clean = function() end
