@@ -7310,14 +7310,17 @@ run(function()
 		return _projectilesCache
 	end
 
+	local fhBusy = false
+
 	local function canShoot(proj)
+		if FastHitPending and not fhBusy and (tick() - (store._fhPendingAt or 0)) > 1.5 then
+			FastHitPending = false
+		end
 		return tick() > (FireRates[proj[1].itemType] or 0) and tick() > LastShot and not FastHitPending
 	end
 
 	local sharedFastHitsRayParams = RaycastParams.new()
 	sharedFastHitsRayParams.FilterType = Enum.RaycastFilterType.Exclude
-
-	local fhBusy = false
 
 	local function fhInAngle(v)
 		if not AngleSlider or AngleSlider.Value >= 360 then return true end
@@ -7337,9 +7340,21 @@ run(function()
 		if store.hand and store.hand.tool == tool and not store._equipPending then return true end
 		pcall(switchItem, tool, 0.0475)
 		local deadline = tick() + math.clamp(netPing() * 1.5 + 0.08, 0.2, 0.55)
+		local resendAt = tick() + math.clamp(netPing() * 0.75, 0.08, 0.24)
+		local resent = false
 		while tick() < deadline do
 			if store.hand and store.hand.tool == tool then return true end
 			if not tool.Parent or not lplr.Character then return false end
+			if not resent and tick() >= resendAt then
+				resent = true
+				local check = lplr.Character:FindFirstChild('HandInvItem')
+				if check and check.Value ~= tool then check.Value = tool end
+				task.spawn(function()
+					pcall(function()
+						bedwars.Client:Get(remotes.EquipItem):CallServerAsync({hand = tool})
+					end)
+				end)
+			end
 			task.wait()
 		end
 		local serverTool = store.hand and store.hand.tool
@@ -7365,8 +7380,9 @@ run(function()
 		check.Value = sw.tool
 		task.spawn(function()
 			pcall(function() bedwars.Client:Get(remotes.EquipItem):CallServerAsync({hand = sw.tool}) end)
-			for _ = 1, 2 do
-				task.wait(0.06)
+			local interval = math.clamp(netPing() * 0.5, 0.045, 0.12)
+			for _ = 1, 4 do
+				task.wait(interval)
 				if token ~= fhRestoreToken then return end
 				if not sw.tool.Parent then return end
 				if not ((Killaura and Killaura.Enabled) or (vape.Modules and vape.Modules['GrandKillaura'] and vape.Modules['GrandKillaura'].Enabled)) then return end
@@ -7588,6 +7604,7 @@ run(function()
 		)
 
 		FastHitPending = true
+		store._fhPendingAt = tick()
 		task.spawn(function()
 			if switched then
 				task.delay(0.06, function()
@@ -7896,9 +7913,9 @@ run(function()
 
 		fhBusy = true
 		store._fhBusySince = workspace:GetServerTimeNow()
-		if hotbarSwitch(bowSlot) then task.wait(0.0375) end
+		if hotbarSwitch(bowSlot) then task.wait(math.clamp(netPing() * 0.55 + 0.02, 0.035, 0.16)) end
 		shootProjectile(item, ammo, projectile, itemMeta, selfPos, ent, true)
-		task.wait(0.075)
+		task.wait(math.clamp(0.06 + netPing() * 0.2, 0.075, 0.15))
 		hotbarSwitch(swordSlot or originalSlot)
 		fhBusy = false
 	end
@@ -8819,6 +8836,19 @@ run(function()
 		end
 	end
 
+	function GrandFire.swordMeta()
+		local hand = store.hand
+		if hand and hand.tool and isMeleeWeapon(hand.tool.Name) then
+			local meta = bedwars.ItemMeta[hand.tool.Name]
+			if meta then return meta end
+		end
+		local sw = store.tools.sword
+		if sw and sw.tool then
+			return bedwars.ItemMeta[sw.tool.Name]
+		end
+		return nil
+	end
+
 	local function grandGetAttackData()
 		if not entitylib.isAlive then return false end
 		if not entitylib.character or not entitylib.character.RootPart then return false end
@@ -8987,20 +9017,12 @@ run(function()
 	function GrandFire.attempt()
 		if fhBusy and (workspace:GetServerTimeNow() - (store._fhBusySince or 0)) < 0.10 then return false end
 		if lastProjectileTime > 0 and (workspace:GetServerTimeNow() - lastProjectileTime) < 0.075 then return false end
-		if tick() < GrandFire.ItemUntil then return false end
-		if store._equipPending and (tick() - (store._equipSince or 0)) < 0.75 then return false end
 
 		local v = GrandFire.resolveTarget()
 		if not v then return false end
 
 		local sword, meta = grandGetAttackData()
 		if not sword or not meta then return false end
-		local liveTool = liveHandTool()
-		if liveTool then
-			if liveTool ~= sword.tool and isProjectileTool(liveTool) then return false end
-		elseif store.hand and store.hand.tool and store.hand.toolType ~= 'sword' and not isMeleeWeapon(store.hand.tool.Name) then
-			return false
-		end
 
 		local tchar = v.Character
 		if not tchar or not tchar.PrimaryPart then return false end
@@ -9040,14 +9062,15 @@ run(function()
 		GrandFire.AcqTime, GrandFire.AcqRes = 0, nil
 		GrandFire.ItemUntil = 0
 		GrandFire.LastSword = nil
+		GrandFire.HoldTarget, GrandFire.HoldUntil = nil, 0
 
 		GrandFire.Loop = task.spawn(function()
 			while GrandKillaura and GrandKillaura.Enabled do
 				runService.Heartbeat:Wait()
 				GrandFire.watchHand()
 
-				local sword, meta = grandGetAttackData()
-				if sword and meta then
+				local meta = GrandFire.swordMeta()
+				if meta then
 					GrandFire.Period = getAttackDelay(meta)
 				end
 
@@ -9069,6 +9092,7 @@ run(function()
 		GrandFire.AcqTime, GrandFire.AcqRes = 0, nil
 		GrandFire.ItemUntil = 0
 		GrandFire.LastSword = nil
+		GrandFire.HoldTarget, GrandFire.HoldUntil = nil, 0
 		GrandLastSrv = 0
 	end
 
@@ -9239,6 +9263,10 @@ run(function()
 
 							local liveProj = isProjectileTool(liveHandTool())
 							GrandAttacking = chosen ~= nil and not liveProj
+							if chosen then
+								GrandFire.HoldTarget = chosen
+								GrandFire.HoldUntil = tick() + 0.6
+							end
 							store.GrandKillauraTarget = chosen
 
 							if hasValidSwing then
@@ -9264,7 +9292,12 @@ run(function()
 						end
 					else
 						GrandAttacking = false
-						store.GrandKillauraTarget = nil
+						if GrandFire.HoldTarget and tick() < (GrandFire.HoldUntil or 0) and GrandFire.aliveTarget(GrandFire.HoldTarget)
+							and (isProjectileTool(liveHandTool()) or (GrandFire.ScanCache and #GrandFire.ScanCache == 0)) then
+							store.GrandKillauraTarget = GrandFire.HoldTarget
+						else
+							store.GrandKillauraTarget = nil
+						end
 					end
 
 					for i, box in GrandBoxes do
