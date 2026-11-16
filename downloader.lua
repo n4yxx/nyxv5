@@ -11,7 +11,13 @@ local delfile = delfile or function(file) writefile(file, '') end
 local function downloadFile(path, func, forceRef)
 	if forceRef or not isfile(path) or readfile(path) == '' then
 		local suc, res = pcall(function()
-			local ref = forceRef or readfile('NYX/profiles/commit.txt')
+			local ref = forceRef
+			if type(ref) ~= 'string' or ref == '' then
+				ref = isfile('NYX/profiles/commit.txt') and readfile('NYX/profiles/commit.txt')
+			end
+			if type(ref) ~= 'string' or ref == '' then
+				ref = 'main'
+			end
 			return game:HttpGet('https://raw.githubusercontent.com/nyxv4/nyx1/'..ref..'/'..select(1, path:gsub('NYX/', '')), true)
 		end)
 		if not suc or type(res) ~= 'string' or res == '' or res == '404: Not Found' then error(res) end

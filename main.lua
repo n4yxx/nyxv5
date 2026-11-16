@@ -90,6 +90,7 @@ if bootstrapCommit and bootstrapCommit ~= '' then
 		latestCommit = pinned
 	end
 end
+if bootstrapCommit and #bootstrapCommit == 40 then latestCommit = bootstrapCommit end
 
 if identifyexecutor and table.find({'Madium', 'Medium'}, ({identifyexecutor()})[1]) then
 	local realgca = getcustomasset or getsynasset
@@ -323,11 +324,11 @@ if getgenv().Closet then
 end
 
 if not shared.VapeIndependent then
-	loadstring(downloadFile('NYX/games/universal.lua'), 'universal')()
+	loadstring(downloadFile('NYX/games/universal.lua', nil, latestCommit), 'universal')()
 	local gameFileId = (game.GameId == 2619619496) and (game.PlaceId == 6872265039 and 6872265039 or 6872274481) or (game.GameId == 10516888336 and 10516888336 or game.PlaceId)
 
 	if isfile('NYX/games/' .. gameFileId .. '.lua') and #readfile('NYX/games/' .. gameFileId .. '.lua') > 0 then
-		local gameSrc = downloadFile('NYX/games/' .. gameFileId .. '.lua')
+		local gameSrc = downloadFile('NYX/games/' .. gameFileId .. '.lua', nil, latestCommit)
 		local gameFunc, gameErr = loadstring(gameSrc, tostring(gameFileId))
 		if not gameFunc then
 			local ls = gameSrc:split('\n')
@@ -370,15 +371,11 @@ if not shared.VapeIndependent then
 		gameFunc(...)
 	else
 		if not shared.VapeDeveloper then
-			local suc, res = pcall(function()
-				return game:HttpGet('https://raw.githubusercontent.com/nyxv4/nyx1/' .. readfile('NYX/profiles/commit.txt') .. '/games/' .. gameFileId .. '.lua', true)
+			local ok, res = pcall(function()
+				return downloadFile('NYX/games/' .. gameFileId .. '.lua', nil, latestCommit)
 			end)
-			if suc and type(res) == 'string' and #res > 0 and res ~= '404: Not Found' then
-				local path = 'NYX/games/' .. gameFileId .. '.lua'
-				if not isfile(path) then
-					writefile(path, '--This watermark is used to delete the file if its cached, remove it to make the file persist after vape updates.\n' .. res)
-				end
-				loadstring(readfile(path), tostring(gameFileId))(...)
+			if ok and type(res) == 'string' and #res > 0 then
+				loadstring(res, tostring(gameFileId))(...)
 			end
 		end
 	end

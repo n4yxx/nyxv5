@@ -15,10 +15,9 @@ local function downloadFile(path, func)
 	if not isfile(path) or readfile(path) == '' then
 		local suc, res = pcall(function()
 			local commit = isfile('NYX/profiles/commit.txt') and readfile('NYX/profiles/commit.txt')
-			if commit == nil or commit == '' then
-				commit = isfile('NYX/profiles/commit.txt') and readfile('NYX/profiles/commit.txt')
+			if type(commit) ~= 'string' or commit == '' then
+				commit = 'main'
 			end
-			if commit == nil or commit == '' then commit = 'main' end
 			return game:HttpGet('https://raw.githubusercontent.com/nyxv4/nyx1/'..commit..'/'..select(1, path:gsub('^NYX/', '')), true)
 		end)
 		if not suc or type(res) ~= 'string' or res == '' or res == '404: Not Found' then
