@@ -1,4 +1,4 @@
---NYXBUILD:vape3
+--NYXBUILD:vape4
 local mainapi = {
 	Categories = {},
 	GUIColor = {
@@ -1497,7 +1497,7 @@ getcustomasset = function(path)
 	return result
 end
 
-local BRAND_BUILD = 'vape3'
+local BRAND_BUILD = 'vape4'
 
 local function getBrandAsset(path)
 	if not assetfunction then return '' end
