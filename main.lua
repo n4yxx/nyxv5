@@ -4,7 +4,7 @@ if shared.vape then shared.vape:Uninject() end
 local LOADER_URL = "https://raw.githubusercontent.com/nyxv4/nyx1/main/downloader.lua" 
 local _initArgs = ...
 if type(_initArgs) ~= "table" then _initArgs = {} end
-shared.aerov4User = "spookers 👻"
+shared.NYXUser = "spookers 👻"
 
 if identifyexecutor then
 	if table.find({'Wave', 'Seliware', 'Volt'}, ({identifyexecutor()})[1]) then
@@ -195,7 +195,7 @@ pcall(migrateProfiles)
 local function finishLoading()
 	vape.Init = nil
 	if not vape.Load then
-		warn('[aerov4] vape.Load is nil skipping load')
+		warn('[NYX] vape.Load is nil skipping load')
 		return
 	end
 	vape:Load()
@@ -246,7 +246,7 @@ local function finishLoading()
 	if not shared.vapereload then
 		if not vape.Categories then return end
 		if vape.Categories.Main.Options['GUI bind indicator'].Enabled then
-			vape:CreateNotification('[aerov4] Finished Loading', 'wsg ' .. shared.aerov4User .. ' ' .. (vape.VapeButton and 'Press the button in the top right to open GUI' or 'Press ' .. table.concat(vape.Keybind, ' + '):upper() .. ' to open GUI'), 5)
+			vape:CreateNotification('[NYX] Finished Loading', 'wsg ' .. shared.NYXUser .. ' ' .. (vape.VapeButton and 'Press the button in the top right to open GUI' or 'Press ' .. table.concat(vape.Keybind, ' + '):upper() .. ' to open GUI'), 5)
 		end
 	end
 end
@@ -293,10 +293,10 @@ if not vape then
 end
 if not vape.Load then
 	if delfile then pcall(function() delfile('NYX/guis/' .. gui .. '.lua') end) end
-	error('[aerov4] gui file corrupted (missing load) reinject..')
+	error('[NYX] gui file corrupted (missing load) reinject..')
 end
 if not vape.Init and not vape.Load then
-	error('[aerov4] failed to initialize properly reinject to fix this bs')
+	error('[NYX] failed to initialize properly reinject to fix this bs')
 end
 shared.vape = vape
 task.wait(0.1)

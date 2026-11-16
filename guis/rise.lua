@@ -244,7 +244,7 @@ local function downloadFile(path, func)
 	if not isfile(path) then
 		createDownloader(path)
 		local suc, res = pcall(function()
-			return game:HttpGet('https://raw.githubusercontent.com/nyxv4/nyx1/'..((isfile('newvape/profiles/commit.txt') and readfile('newvape/profiles/commit.txt')) or (isfile('aerov4/profiles/commit.txt') and readfile('aerov4/profiles/commit.txt')) or 'main')..'/'..select(1, path:gsub('newvape/', '')), true)
+			return game:HttpGet('https://raw.githubusercontent.com/nyxv4/nyx1/'..((isfile('newvape/profiles/commit.txt') and readfile('newvape/profiles/commit.txt')) or (isfile('NYX/profiles/commit.txt') and readfile('NYX/profiles/commit.txt')) or 'main')..'/'..select(1, path:gsub('newvape/', '')), true)
 		end)
 		if not suc or res == '404: Not Found' then
 			error(res)

@@ -12,13 +12,13 @@ local run = function(func)
 		local ok, err = pcall(func)
 		_runBusy = false
 		if not ok then
-			warn('[aerov4] module failed to load: ' .. tostring(err))
+			warn('[NYX] module failed to load: ' .. tostring(err))
 		end
 		return
 	end
 	local ok, err = pcall(func)
 	if not ok then
-		warn('[aerov4] module failed to load: ' .. tostring(err))
+		warn('[NYX] module failed to load: ' .. tostring(err))
 	end
 end
 task.wait()
@@ -203,7 +203,7 @@ setmetatable(remotes, {
 			task.delay(10, function()
 				if rawget(remotes, key) == nil then
 					pcall(function()
-						vape.Notify('[aerov4] remote "' .. tostring(key) .. '" changed or removed some features may not work bru (dm @5qvx for fix)', 6)
+						vape.Notify('[NYX] remote "' .. tostring(key) .. '" changed or removed some features may not work bru (dm @5qvx for fix)', 6)
 					end)
 				end
 			end)
@@ -219,7 +219,7 @@ local function addBlur(parent)
 	blur.Size = UDim2.new(1, 89, 1, 52)
 	blur.Position = UDim2.fromOffset(-48, -31)
 	blur.BackgroundTransparency = 1
-	blur.Image = getcustomasset('aerov4/assets/new/blur.png')
+	blur.Image = getcustomasset('NYX/assets/new/blur.png')
 	blur.ScaleType = Enum.ScaleType.Slice
 	blur.SliceCenter = Rect.new(52, 31, 261, 502)
 	blur.Parent = parent
@@ -1474,7 +1474,7 @@ run(function()
 
 		if remote == '' or remote == nil then
 			if not preDumped[i] then
-				notif('aerov4', 'Failed to grab remote ('..tostring(i)..')', 10, 'alert')
+				notif('NYX', 'Failed to grab remote ('..tostring(i)..')', 10, 'alert')
 			end
 			remote = preDumped[i] or ''
 		end
@@ -9103,15 +9103,15 @@ run(function()
 	GrandSwingRange = GrandKillaura:CreateSlider({
 		Name = 'Swing range',
 		Min = 1,
-		Max = 18,
-		Default = 18,
+		Max = 40,
+		Default = 40,
 		Suffix = function(val) return val == 1 and 'stud' or 'studs' end
 	})
 	GrandAttackRange = GrandKillaura:CreateSlider({
 		Name = 'Attack range',
 		Min = 1,
-		Max = 18,
-		Default = 18,
+		Max = 24,
+		Default = 24,
 		Suffix = function(val) return val == 1 and 'stud' or 'studs' end
 	})
 	GrandChargeTime = GrandKillaura:CreateSlider({
@@ -10980,295 +10980,6 @@ run(function()
 	})
 end)
 
-run(function()
-	local StreamerMode
-	local NameBox
-	local restored = setmetatable({}, {__mode = 'k'})
-	local hooked = setmetatable({}, {__mode = 'k'})
-	local textClasses = {TextLabel = true, TextButton = true, TextBox = true}
-	local needles = {}
-	local minLength = math.huge
-	local alias = 'hidden'
-	local writing
-	local playerClass
-	local savedUsername, savedDisplay, savedTag, savedLevel
-	local queued = false
-
-	local function readAlias()
-		local value = NameBox and NameBox.Value
-		if type(value) == 'string' and value ~= '' then
-			return value
-		end
-		return 'hidden'
-	end
-
-	local function buildNeedles()
-		table.clear(needles)
-		minLength = math.huge
-		local seen = {}
-		for _, name in {lplr.Name, lplr.DisplayName} do
-			if type(name) == 'string' and name ~= '' and not seen[name] then
-				seen[name] = true
-				minLength = math.min(minLength, #name)
-				table.insert(needles, {
-					plain = name:lower(),
-					forms = {name, name:lower(), name:upper()}
-				})
-			end
-		end
-	end
-
-	local function maskText(text)
-		local out = text
-		for _, needle in needles do
-			for _, form in needle.forms do
-				if form ~= '' and out:find(form, 1, true) then
-					out = out:gsub((form:gsub('%W', '%%%0')), alias)
-				end
-			end
-		end
-		return out
-	end
-
-	local function keepText(object, value)
-		writing = object
-		object.Text = value
-		writing = nil
-	end
-
-	local function watchText(object, apply)
-		if hooked[object] then return end
-		hooked[object] = object:GetPropertyChangedSignal('Text'):Connect(apply)
-	end
-
-	local function nearbyName(object)
-		local parent = object.Parent
-		for _ = 1, 3 do
-			if not parent then return nil end
-			local label = parent:FindFirstChild('PlayerName', true)
-			if label then return label end
-			parent = parent.Parent
-		end
-		return nil
-	end
-
-	local function blankLevel(object)
-		if writing == object or not textClasses[object.ClassName] then return end
-		if not object.Name:lower():find('level', 1, true) then return end
-		local owner = nearbyName(object)
-		if not owner or not owner.Text:find(alias, 1, true) then return end
-
-		local function apply()
-			if writing == object or not object.Parent then return end
-			local text = object.Text
-			if type(text) ~= 'string' or text == '' then return end
-			if restored[object] == nil then
-				restored[object] = text
-			end
-			keepText(object, '')
-		end
-
-		apply()
-		watchText(object, apply)
-	end
-
-	local function sweepLevels(object)
-		if not object then return end
-		for _, child in object:GetDescendants() do
-			blankLevel(child)
-		end
-	end
-
-	local function maskObject(object)
-		if not textClasses[object.ClassName] then return end
-
-		local function apply()
-			if writing == object or not object.Parent then return end
-			local text = object.Text
-			if type(text) ~= 'string' or #text < minLength then return end
-
-			local lower = text:lower()
-			local found = false
-			for _, needle in needles do
-				if lower:find(needle.plain, 1, true) then
-					found = true
-					break
-				end
-			end
-			if not found then return end
-
-			local masked = maskText(text)
-			if masked == text then return end
-
-			if restored[object] == nil then
-				restored[object] = text
-			end
-			keepText(object, masked)
-			watchText(object, apply)
-			sweepLevels(object.Parent)
-		end
-
-		apply()
-	end
-
-	local function sweep(root)
-		if not root then return end
-		if vape.ThreadFix and setthreadidentity then
-			pcall(setthreadidentity, 8)
-		end
-
-		StreamerMode:Clean(root.DescendantAdded:Connect(function(object)
-			if not StreamerMode.Enabled then return end
-			maskObject(object)
-			blankLevel(object)
-		end))
-
-		local clock = os.clock()
-		for _, object in root:GetDescendants() do
-			maskObject(object)
-			blankLevel(object)
-			if os.clock() - clock > 0.002 then
-				task.wait()
-				if not StreamerMode.Enabled then return end
-				clock = os.clock()
-				if vape.ThreadFix and setthreadidentity then
-					pcall(setthreadidentity, 8)
-				end
-			end
-		end
-	end
-
-	local function findPlayerClass()
-		if playerClass then return playerClass end
-		pcall(function()
-			local util = bedwars.GamePlayerUtil
-			if not util then
-				for _, module in replicatedStorage.TS:GetDescendants() do
-					if module:IsA('ModuleScript') and module.Name:lower():find('game%-player%-util') then
-						local ok, res = pcall(require, module)
-						if ok and type(res) == 'table' and type(res.GamePlayerUtil) == 'table' then
-							util = res.GamePlayerUtil
-							break
-						end
-					end
-				end
-			end
-			local holder = util and util.getGamePlayer and util.getGamePlayer(lplr)
-			local meta = holder and getmetatable(holder)
-			playerClass = meta and meta.__index or nil
-		end)
-		return playerClass
-	end
-
-	local function isMe(holder)
-		local ok, player = pcall(function()
-			return holder:getPlayer()
-		end)
-		return ok and player ~= nil and player.UserId == lplr.UserId
-	end
-
-	local function hookClass()
-		local class = findPlayerClass()
-		if not class or savedUsername then return end
-
-		savedUsername, savedDisplay = class.getUsername, class.getDisplayName
-		savedTag, savedLevel = class.getClanTag, class.getLevel
-
-		class.getUsername = function(self, ...)
-			return isMe(self) and alias or savedUsername(self, ...)
-		end
-		class.getDisplayName = function(self, ...)
-			return isMe(self) and alias or savedDisplay(self, ...)
-		end
-		class.getClanTag = function(self, ...)
-			return isMe(self) and '' or savedTag(self, ...)
-		end
-		class.getLevel = function(self, ...)
-			return isMe(self) and -1 or savedLevel(self, ...)
-		end
-	end
-
-	local function unhookClass()
-		local class = playerClass
-		if not class or not savedUsername then return end
-		class.getUsername, class.getDisplayName = savedUsername, savedDisplay
-		class.getClanTag, class.getLevel = savedTag, savedLevel
-		savedUsername, savedDisplay, savedTag, savedLevel = nil, nil, nil, nil
-	end
-
-	local function reload()
-		if queued or not StreamerMode or not StreamerMode.Enabled then return end
-		queued = true
-		task.delay(0.3, function()
-			queued = false
-			if StreamerMode.Enabled then
-				StreamerMode:Toggle()
-				StreamerMode:Toggle()
-			end
-		end)
-	end
-
-	StreamerMode = vape.Categories.Render:CreateModule({
-		Name = 'StreamerMode',
-		Function = function(callback)
-			if callback then
-				buildNeedles()
-				alias = readAlias()
-				for _, needle in needles do
-					for _, form in needle.forms do
-						if form ~= '' and alias:find(form, 1, true) then
-							alias = 'hidden'
-						end
-					end
-				end
-
-				hookClass()
-
-				for _, root in {lplr:FindFirstChildOfClass('PlayerGui'), coreGui, gethui and gethui() or nil, lplr.Character} do
-					sweep(root)
-				end
-
-				StreamerMode:Clean(lplr.CharacterAdded:Connect(function(char)
-					if StreamerMode.Enabled then
-						sweep(char)
-					end
-				end))
-			else
-				unhookClass()
-
-				if vape.ThreadFix and setthreadidentity then
-					pcall(setthreadidentity, 8)
-				end
-
-				for object, conn in hooked do
-					pcall(function()
-						conn:Disconnect()
-					end)
-				end
-				table.clear(hooked)
-
-				for object, text in restored do
-					if object.Parent then
-						keepText(object, text)
-					end
-				end
-				writing = nil
-				table.clear(restored)
-			end
-		end,
-		Tooltip = 'changes ur name everywhere on ur screen so u can screenshare and etc without leaking it',
-		ExtraText = function()
-			return readAlias()
-		end
-	})
-
-	NameBox = StreamerMode:CreateTextBox({
-		Name = 'name',
-		Default = 'motion is some ass gng',
-		Placeholder = 'type a name...',
-		Function = reload
-	})
-end)
 
 run(function()
 	local NameTags
@@ -13156,796 +12867,6 @@ run(function()
 	end)
 end)
 
-run(function()
-	local GeneratorESP
-	DiamondToggle = nil
-	EmeraldToggle = nil
-	TeamGenToggle = nil
-	ShowOwnTeamGen = nil
-	ShowEnemyTeamGen = nil
-	local UIStyle
-	local CompactDiamondToggle
-	local CompactEmeraldToggle
-	local CollectionService = collectionService
-	local RunService = runService
-	local Reference = {}
-	local Folder = Instance.new('Folder')
-	Folder.Parent = vape.gui
-	local CompactFolder = Instance.new('Folder')
-	CompactFolder.Parent = vape.gui
-	local teamColors = getgenv().aeroTeamColors
-
-	local generatorTypes = {
-		diamond = {
-			keywords = {'diamond'},
-			color = Color3.fromRGB(85, 200, 255),
-			icon = 'diamond',
-			displayName = 'Diamond',
-			isTeamGen = false
-		},
-		emerald = {
-			keywords = {'emerald'},
-			color = Color3.fromRGB(0, 255, 100),
-			icon = 'emerald',
-			displayName = 'Emerald',
-			isTeamGen = false
-		}
-	}
-
-	local compactUI = Instance.new('ScreenGui')
-	compactUI.Name = 'GeneratorCompactUI'
-	compactUI.Parent = vape.gui
-	compactUI.Enabled = false
-	compactUI.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
-	compactUI.DisplayOrder = 10
-	compactUI.ResetOnSpawn = false
-
-	local mainFrame = Instance.new('Frame')
-	mainFrame.Name = 'MainFrame'
-	mainFrame.Parent = compactUI
-	mainFrame.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
-	mainFrame.BackgroundTransparency = 0.3
-	mainFrame.BorderSizePixel = 0
-	mainFrame.Position = UDim2.new(1, -8, 1, -8)
-	mainFrame.Size = UDim2.new(0, 120, 0, 100)
-	mainFrame.AnchorPoint = Vector2.new(1, 1)
-
-	local uicorner = Instance.new('UICorner')
-	uicorner.CornerRadius = UDim.new(0, 8)
-	uicorner.Parent = mainFrame
-
-	local title = Instance.new('TextLabel')
-	title.Name = 'Title'
-	title.Parent = mainFrame
-	title.BackgroundTransparency = 1
-	title.Size = UDim2.new(1, 0, 0, 25)
-	title.Position = UDim2.new(0, 0, 0, 5)
-	title.Text = "GEN ESP"
-	title.TextColor3 = Color3.fromRGB(255, 255, 255)
-	title.TextSize = 14
-	title.Font = Enum.Font.GothamBold
-	title.TextStrokeTransparency = 0.5
-	title.TextStrokeColor3 = Color3.new(0, 0, 0)
-
-	local diamondFrame = Instance.new('Frame')
-	diamondFrame.Name = 'DiamondFrame'
-	diamondFrame.Parent = mainFrame
-	diamondFrame.BackgroundTransparency = 1
-	diamondFrame.Size = UDim2.new(1, -20, 0, 25)
-	diamondFrame.Position = UDim2.new(0, 10, 0, 35)
-
-	local diamondIcon = Instance.new('ImageLabel')
-	diamondIcon.Name = 'DiamondIcon'
-	diamondIcon.Parent = diamondFrame
-	diamondIcon.BackgroundTransparency = 1
-	diamondIcon.Size = UDim2.new(0, 18, 0, 18)
-	diamondIcon.Position = UDim2.new(0, 0, 0.5, -9)
-	diamondIcon.Image = bedwars.getIcon({itemType = 'diamond'}, true)
-
-	local diamondTimer = Instance.new('TextLabel')
-	diamondTimer.Name = 'DiamondTimer'
-	diamondTimer.Parent = diamondFrame
-	diamondTimer.BackgroundTransparency = 1
-	diamondTimer.Size = UDim2.new(1, -25, 1, 0)
-	diamondTimer.Position = UDim2.new(0, 25, 0, 0)
-	diamondTimer.Text = "00"
-	diamondTimer.TextColor3 = Color3.fromRGB(85, 200, 255)
-	diamondTimer.TextSize = 18
-	diamondTimer.Font = Enum.Font.GothamBold
-	diamondTimer.TextXAlignment = Enum.TextXAlignment.Left
-
-	local emeraldFrame = Instance.new('Frame')
-	emeraldFrame.Name = 'EmeraldFrame'
-	emeraldFrame.Parent = mainFrame
-	emeraldFrame.BackgroundTransparency = 1
-	emeraldFrame.Size = UDim2.new(1, -20, 0, 25)
-	emeraldFrame.Position = UDim2.new(0, 10, 0, 65)
-
-	local emeraldIcon = Instance.new('ImageLabel')
-	emeraldIcon.Name = 'EmeraldIcon'
-	emeraldIcon.Parent = emeraldFrame
-	emeraldIcon.BackgroundTransparency = 1
-	emeraldIcon.Size = UDim2.new(0, 18, 0, 18)
-	emeraldIcon.Position = UDim2.new(0, 0, 0.5, -9)
-	emeraldIcon.Image = bedwars.getIcon({itemType = 'emerald'}, true)
-
-	local emeraldTimer = Instance.new('TextLabel')
-	emeraldTimer.Name = 'EmeraldTimer'
-	emeraldTimer.Parent = emeraldFrame
-	emeraldTimer.BackgroundTransparency = 1
-	emeraldTimer.Size = UDim2.new(1, -25, 1, 0)
-	emeraldTimer.Position = UDim2.new(0, 25, 0, 0)
-	emeraldTimer.Text = "00"
-	emeraldTimer.TextColor3 = Color3.fromRGB(0, 255, 100)
-	emeraldTimer.TextSize = 18
-	emeraldTimer.Font = Enum.Font.GothamBold
-	emeraldTimer.TextXAlignment = Enum.TextXAlignment.Left
-
-	local diamondTimes = {}
-	local emeraldTimes = {}
-
-	local function getMyTeamId()
-		local myTeam = lplr:GetAttribute('Team')
-		if myTeam == nil then return nil end
-		return tonumber(myTeam)
-	end
-
-	local function getGeneratorTeamId(generatorId)
-		local teamNum = string.match(generatorId, "^(%d+)_generator")
-		if teamNum then
-			return tonumber(teamNum)
-		end
-		return nil
-	end
-
-	local function isTeamGenerator(generatorId)
-		return string.match(generatorId, "^%d+_generator") ~= nil
-	end
-
-	local function getGeneratorType(generatorId)
-		local idLower = string.lower(generatorId)
-
-		if isTeamGenerator(generatorId) then
-			return 'teamgen', {
-				color = Color3.fromRGB(200, 200, 200),
-				icon = 'iron',
-				displayName = 'Team Gen',
-				isTeamGen = true
-			}
-		end
-
-		for genType, config in pairs(generatorTypes) do
-			for _, keyword in ipairs(config.keywords) do
-				if idLower:find(keyword) then
-					return genType, config
-				end
-			end
-		end
-		return nil, nil
-	end
-
-	local function isGeneratorEnabled(genType, teamId)
-		if genType == 'diamond' then
-			return DiamondToggle.Enabled
-		elseif genType == 'emerald' then
-			return EmeraldToggle.Enabled
-		elseif genType == 'teamgen' then
-			if not TeamGenToggle.Enabled then return false end
-			local myTeamId = getMyTeamId()
-			if not myTeamId or not teamId then return TeamGenToggle.Enabled end
-			if teamId == myTeamId then
-				return ShowOwnTeamGen.Enabled
-			else
-				return ShowEnemyTeamGen.Enabled
-			end
-		end
-		return false
-	end
-
-	local function getProperIcon(iconType)
-		local icon = bedwars.getIcon({itemType = iconType}, true)
-		if not icon or icon == "" then return nil end
-		return icon
-	end
-
-	local function getTierText(generatorAdornee)
-		if not generatorAdornee then return nil end
-		if generatorAdornee.Name ~= 'GeneratorAdornee' then return nil end
-		local reactTree = generatorAdornee:FindFirstChild('RoactTree')
-		if not reactTree then return nil end
-		local teamApp = reactTree:FindFirstChild('TeamOreGeneratorApp')
-		if not teamApp then return nil end
-		local globalGen = teamApp:FindFirstChild('GlobalOreGenerator')
-		if globalGen then
-			for _, child in pairs(globalGen:GetDescendants()) do
-				if child:IsA('TextLabel') then
-					local text = child.Text
-					if text:find("Tier") or text:match("^[IVX]+$") or text == "0" then
-						return child
-					end
-				end
-			end
-		end
-		local teamGenMain = teamApp:FindFirstChild('TeamGenMain')
-		if teamGenMain then
-			for _, child in pairs(teamGenMain:GetDescendants()) do
-				if child:IsA('TextLabel') then
-					local text = child.Text
-					if text:find("Tier") or text:match("^[IVX]+$") or text == "0" then
-						return child
-					end
-				end
-			end
-		end
-		return nil
-	end
-
-	local function extractTierLevel(tierText)
-		if not tierText or tierText == "" then return "0" end
-		if tierText == "0" then return "0" end
-		local tierMatch = tierText:match("Tier%s+([IVX]+)")
-		if tierMatch then return tierMatch end
-		if tierText:match("^[IVX]+$") then return tierText end
-		local numTier = tierText:match("Tier%s+(%d+)")
-		if numTier then
-			local num = tonumber(numTier)
-			if num == 0 then return "0"
-			elseif num == 1 then return "I"
-			elseif num == 2 then return "II"
-			elseif num == 3 then return "III"
-			end
-		end
-		return "0"
-	end
-
-	local function getCountdownText(generatorAdornee)
-		if not generatorAdornee then return nil end
-		if generatorAdornee.Name ~= 'GeneratorAdornee' then return nil end
-		local reactTree = generatorAdornee:FindFirstChild('RoactTree')
-		if not reactTree then return nil end
-		local teamApp = reactTree:FindFirstChild('TeamOreGeneratorApp')
-		if not teamApp then return nil end
-		local globalGen = teamApp:FindFirstChild('GlobalOreGenerator')
-		if not globalGen then return nil end
-		local countdown = globalGen:FindFirstChild('Countdown')
-		if not countdown then return nil end
-		local textLabel = countdown:FindFirstChild('Text')
-		if not textLabel then
-			if countdown:IsA('TextLabel') then return countdown end
-			return nil
-		end
-		return textLabel
-	end
-
-	local function extractSecondsFromText(text)
-		if not text or text == "" then return 0 end
-		local seconds = text:match("%[(%d+)%]")
-		if seconds then return tonumber(seconds) or 0 end
-		local justNumber = text:match("(%d+)")
-		if justNumber then return tonumber(justNumber) or 0 end
-		return 0
-	end
-
-	local resourceDrops = {}
-	local function getResourceCount(position, resourceType)
-		local count = 0
-		for _, drop in pairs(resourceDrops) do
-			if drop:FindFirstChild('Handle') then
-				local dropName = drop.Name:lower()
-				if dropName:find(resourceType) then
-					local dist = (drop.Handle.Position - position).Magnitude
-					if dist <= 10 then
-						local amount = drop:GetAttribute('Amount') or 1
-						count = count + amount
-					end
-				end
-			end
-		end
-		return count
-	end
-
-	local CompactGenerators = {}
-
-	local function rebuildCompactGenerators()
-		table.clear(CompactGenerators)
-		scanDescendants(workspace, function(obj)
-			if obj.Name == 'GeneratorAdornee' then
-				local ok, generatorId = pcall(function() return obj:GetAttribute('Id') end)
-				if ok and generatorId and type(generatorId) == 'string' and generatorId ~= '' then
-					local genType = getGeneratorType(generatorId)
-					if genType == 'diamond' or genType == 'emerald' then
-						table.insert(CompactGenerators, {obj = obj, genType = genType})
-					end
-				end
-			end
-		end, GeneratorESP)
-	end
-
-	local function updateCompactUI()
-		if not GeneratorESP.Enabled or UIStyle.Value ~= 'Compact' then
-			compactUI.Enabled = false
-			return
-		end
-		compactUI.Enabled = true
-		local bestDiamondTime = math.huge
-		local bestEmeraldTime = math.huge
-		for i = #CompactGenerators, 1, -1 do
-			local entry = CompactGenerators[i]
-			if not entry.obj or not entry.obj.Parent then
-				table.remove(CompactGenerators, i)
-				continue
-			end
-			local countdownText = getCountdownText(entry.obj)
-			if countdownText and countdownText.Text then
-				local timeLeft = extractSecondsFromText(countdownText.Text)
-				if entry.genType == 'diamond' and timeLeft > 0 and timeLeft < bestDiamondTime then
-					bestDiamondTime = timeLeft
-				elseif entry.genType == 'emerald' and timeLeft > 0 and timeLeft < bestEmeraldTime then
-					bestEmeraldTime = timeLeft
-				end
-			end
-		end
-		local showDiamond = CompactDiamondToggle and CompactDiamondToggle.Enabled
-		local showEmerald = CompactEmeraldToggle and CompactEmeraldToggle.Enabled
-
-		if not showDiamond and not showEmerald then
-			compactUI.Enabled = false
-			return
-		end
-
-		diamondFrame.Visible = showDiamond
-		emeraldFrame.Visible = showEmerald
-
-		if showDiamond then
-			diamondFrame.Position = UDim2.new(0, 10, 0, 35)
-		end
-		if showEmerald then
-			emeraldFrame.Position = UDim2.new(0, 10, 0, showDiamond and 65 or 35)
-		end
-
-		diamondTimes[1] = bestDiamondTime ~= math.huge and bestDiamondTime or 0
-		emeraldTimes[1] = bestEmeraldTime ~= math.huge and bestEmeraldTime or 0
-		if bestDiamondTime == math.huge then
-			diamondTimer.Text = "00"
-		else
-			diamondTimer.Text = string.format("%02d", bestDiamondTime)
-			if bestDiamondTime <= 5 then
-				diamondTimer.TextColor3 = Color3.fromRGB(255, 50, 50)
-			elseif bestDiamondTime <= 10 then
-				diamondTimer.TextColor3 = Color3.fromRGB(255, 165, 0)
-			else
-				diamondTimer.TextColor3 = Color3.fromRGB(85, 200, 255)
-			end
-		end
-		if bestEmeraldTime == math.huge then
-			emeraldTimer.Text = "00"
-		else
-			emeraldTimer.Text = string.format("%02d", bestEmeraldTime)
-			if bestEmeraldTime <= 5 then
-				emeraldTimer.TextColor3 = Color3.fromRGB(255, 50, 50)
-			elseif bestEmeraldTime <= 10 then
-				emeraldTimer.TextColor3 = Color3.fromRGB(255, 165, 0)
-			else
-				emeraldTimer.TextColor3 = Color3.fromRGB(0, 255, 100)
-			end
-		end
-	end
-
-	local function clearAllESP()
-		Folder:ClearAllChildren()
-		table.clear(Reference)
-		compactUI.Enabled = false
-	end
-
-	local function createESP(generatorAdornee, genType, config, position, teamId)
-		if not isGeneratorEnabled(genType, teamId) then return end
-		if Reference[generatorAdornee] then return end
-
-		if UIStyle.Value == 'Compact' then
-			Reference[generatorAdornee] = {
-				genType = genType,
-				position = position,
-				teamId = teamId,
-				isTeamGen = config.isTeamGen
-			}
-			return
-		end
-		if not generatorAdornee or not generatorAdornee.Parent then return end
-
-		local displayColor = config.color
-		local teamName = nil
-		if config.isTeamGen and teamId and teamColors[teamId] then
-			displayColor = teamColors[teamId].color
-			teamName = teamColors[teamId].name
-		end
-
-		local billboard = Instance.new('BillboardGui')
-		billboard.Parent = Folder
-		billboard.Name = 'generator-esp-' .. genType
-		billboard.AlwaysOnTop = true
-		billboard.ClipsDescendants = false
-		billboard.Adornee = generatorAdornee
-		billboard.Enabled = true  
-
-		if config.isTeamGen then
-			billboard.Size = UDim2.fromOffset(180, 55)
-			billboard.StudsOffsetWorldSpace = Vector3.new(0, 5, 0)
-		else
-			billboard.Size = UDim2.fromOffset(80, 30)
-			billboard.StudsOffsetWorldSpace = Vector3.new(0, 4, 0)
-		end
-
-		local blur = pcall(function()
-			return addBlur(billboard)
-		end) and blur or nil
-		if blur then
-			blur.Visible = true
-		end
-
-		if config.isTeamGen and teamName then
-			local dot = Instance.new('Frame')
-			dot.Name = 'TeamDot'
-			dot.Parent = billboard
-			dot.Size = UDim2.fromOffset(8, 8)
-			dot.Position = UDim2.new(0, 10, 0, 5)
-			dot.BackgroundColor3 = displayColor
-			dot.BorderSizePixel = 0
-			local dotCorner = Instance.new('UICorner')
-			dotCorner.CornerRadius = UDim.new(1, 0)
-			dotCorner.Parent = dot
-
-			local teamLabel = Instance.new('TextLabel')
-			teamLabel.Name = 'TeamLabel'
-			teamLabel.Parent = billboard
-			teamLabel.BackgroundTransparency = 1
-			teamLabel.Size = UDim2.new(1, 0, 0, 18)
-			teamLabel.Position = UDim2.new(0, 0, 0, 0)
-			teamLabel.Text = teamName
-			teamLabel.TextColor3 = displayColor
-			teamLabel.TextSize = 13
-			teamLabel.Font = Enum.Font.GothamBold
-			teamLabel.TextStrokeTransparency = 0.4
-			teamLabel.TextStrokeColor3 = Color3.new(0, 0, 0)
-			teamLabel.TextXAlignment = Enum.TextXAlignment.Center
-		end
-
-		local frame = Instance.new('Frame')
-		frame.Size = config.isTeamGen and UDim2.new(1, 0, 0, 35) or UDim2.fromScale(1, 1)
-		frame.Position = config.isTeamGen and UDim2.new(0, 0, 0, 20) or UDim2.new(0, 0, 0, 0)
-		frame.BackgroundColor3 = Color3.new(0, 0, 0)
-		frame.BackgroundTransparency = 0.3
-		frame.BorderSizePixel = 0
-		frame.Parent = billboard
-
-		if config.isTeamGen and teamId and teamColors[teamId] then
-			local stripe = Instance.new('Frame')
-			stripe.Name = 'TeamStripe'
-			stripe.Parent = frame
-			stripe.Size = UDim2.new(0, 3, 1, 0)
-			stripe.Position = UDim2.new(0, 0, 0, 0)
-			stripe.BackgroundColor3 = displayColor
-			stripe.BorderSizePixel = 0
-			local stripeCorner = Instance.new('UICorner')
-			stripeCorner.CornerRadius = UDim.new(0, 3)
-			stripeCorner.Parent = stripe
-		end
-
-		local uicorner2 = Instance.new('UICorner')
-		uicorner2.CornerRadius = UDim.new(0, 6)
-		uicorner2.Parent = frame
-
-		if config.isTeamGen then
-			local tierLabel = Instance.new('TextLabel')
-			tierLabel.Name = 'Tier'
-			tierLabel.Size = UDim2.new(0, 25, 1, 0)
-			tierLabel.Position = UDim2.new(0, 8, 0, 0)
-			tierLabel.BackgroundTransparency = 1
-			tierLabel.Text = "0"
-			tierLabel.TextColor3 = Color3.fromRGB(255, 255, 100)
-			tierLabel.TextSize = 16
-			tierLabel.Font = Enum.Font.GothamBold
-			tierLabel.TextStrokeTransparency = 0.5
-			tierLabel.TextStrokeColor3 = Color3.new(0, 0, 0)
-			tierLabel.Parent = frame
-
-			local resources = {
-				{name = 'iron',    color = Color3.fromRGB(200, 200, 200), icon = 'iron',    xOffset = 35},
-				{name = 'diamond', color = Color3.fromRGB(85, 200, 255),  icon = 'diamond', xOffset = 85},
-				{name = 'emerald', color = Color3.fromRGB(0, 255, 100),   icon = 'emerald', xOffset = 135}
-			}
-
-			local resourceLabels = {}
-			for _, resource in ipairs(resources) do
-				local iconImage = getProperIcon(resource.icon)
-				if iconImage then
-					local image = Instance.new('ImageLabel')
-					image.Size = UDim2.fromOffset(18, 18)
-					image.Position = UDim2.new(0, resource.xOffset, 0.5, 0)
-					image.AnchorPoint = Vector2.new(0, 0.5)
-					image.BackgroundTransparency = 1
-					image.Image = iconImage
-					image.Parent = frame
-				end
-				local countLabel = Instance.new('TextLabel')
-				countLabel.Name = resource.name .. '_count'
-				countLabel.Size = UDim2.new(0, 25, 1, 0)
-				countLabel.Position = UDim2.new(0, resource.xOffset + 20, 0, 0)
-				countLabel.BackgroundTransparency = 1
-				countLabel.Text = "0"
-				countLabel.TextColor3 = resource.color
-				countLabel.TextSize = 16
-				countLabel.Font = Enum.Font.GothamBold
-				countLabel.TextStrokeTransparency = 0.5
-				countLabel.TextStrokeColor3 = Color3.new(0, 0, 0)
-				countLabel.TextXAlignment = Enum.TextXAlignment.Left
-				countLabel.Parent = frame
-				resourceLabels[resource.name] = countLabel
-			end
-
-			Reference[generatorAdornee] = {
-				billboard = billboard,
-				tierLabel = tierLabel,
-				ironLabel = resourceLabels.iron,
-				diamondLabel = resourceLabels.diamond,
-				emeraldLabel = resourceLabels.emerald,
-				genType = genType,
-				position = position,
-				teamId = teamId,
-				isTeamGen = true
-			}
-		else
-			local iconImage = getProperIcon(config.icon)
-			if iconImage then
-				local image = Instance.new('ImageLabel')
-				image.Size = UDim2.fromOffset(20, 20)
-				image.Position = UDim2.new(0, 5, 0.5, 0)
-				image.AnchorPoint = Vector2.new(0, 0.5)
-				image.BackgroundTransparency = 1
-				image.Image = iconImage
-				image.Parent = frame
-			end
-			local timerLabel = Instance.new('TextLabel')
-			timerLabel.Name = 'Timer'
-			timerLabel.Size = UDim2.new(0, 30, 1, 0)
-			timerLabel.Position = UDim2.new(0.5, 0, 0, 0)
-			timerLabel.AnchorPoint = Vector2.new(0.5, 0)
-			timerLabel.BackgroundTransparency = 1
-			timerLabel.Text = "00"
-			timerLabel.TextColor3 = displayColor
-			timerLabel.TextSize = 18
-			timerLabel.Font = Enum.Font.GothamBold
-			timerLabel.TextStrokeTransparency = 0.5
-			timerLabel.TextStrokeColor3 = Color3.new(0, 0, 0)
-			timerLabel.Parent = frame
-			local amountLabel = Instance.new('TextLabel')
-			amountLabel.Name = 'Amount'
-			amountLabel.Size = UDim2.new(0, 20, 1, 0)
-			amountLabel.Position = UDim2.new(1, -20, 0, 0)
-			amountLabel.BackgroundTransparency = 1
-			amountLabel.Text = "0"
-			amountLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
-			amountLabel.TextSize = 16
-			amountLabel.Font = Enum.Font.GothamBold
-			amountLabel.TextStrokeTransparency = 0.5
-			amountLabel.TextStrokeColor3 = Color3.new(0, 0, 0)
-			amountLabel.Parent = frame
-			Reference[generatorAdornee] = {
-				billboard = billboard,
-				timerLabel = timerLabel,
-				amountLabel = amountLabel,
-				genType = genType,
-				position = position,
-				teamId = teamId,
-				isTeamGen = false
-			}
-		end
-		billboard.Enabled = true
-	end
-
-	local function updateESP(generatorAdornee)
-		local ref = Reference[generatorAdornee]
-		if not ref then return end
-		if UIStyle.Value == 'Compact' then return end
-
-		if ref.isTeamGen then
-			if ref.tierLabel then
-				local tierTextLabel = getTierText(generatorAdornee)
-				if tierTextLabel and tierTextLabel.Text then
-					ref.tierLabel.Text = extractTierLevel(tierTextLabel.Text)
-				else
-					ref.tierLabel.Text = "0"
-				end
-			end
-			if ref.ironLabel then
-				ref.ironLabel.Text = tostring(getResourceCount(ref.position, 'iron'))
-			end
-			if ref.diamondLabel then
-				ref.diamondLabel.Text = tostring(getResourceCount(ref.position, 'diamond'))
-			end
-			if ref.emeraldLabel then
-				ref.emeraldLabel.Text = tostring(getResourceCount(ref.position, 'emerald'))
-			end
-		else
-			local countdownText = getCountdownText(generatorAdornee)
-			if countdownText and countdownText.Text then
-				local timeLeft = extractSecondsFromText(countdownText.Text)
-				if ref.timerLabel then
-					ref.timerLabel.Text = string.format("%02d", timeLeft)
-					if timeLeft <= 5 then
-						ref.timerLabel.TextColor3 = Color3.fromRGB(255, 50, 50)
-					elseif timeLeft <= 10 then
-						ref.timerLabel.TextColor3 = Color3.fromRGB(255, 165, 0)
-					else
-						ref.timerLabel.TextColor3 = generatorTypes[ref.genType].color
-					end
-				end
-			else
-				if ref.timerLabel then
-					ref.timerLabel.Text = "00"
-					ref.timerLabel.TextColor3 = Color3.fromRGB(150, 150, 150)
-				end
-			end
-			if ref.amountLabel then
-				ref.amountLabel.Text = tostring(getResourceCount(ref.position, ref.genType))
-			end
-		end
-	end
-
-	local function processGeneratorAdornee(obj)
-		if obj.Name ~= 'GeneratorAdornee' then return end
-		local ok, generatorId = pcall(function() return obj:GetAttribute('Id') end)
-		if not ok then return end
-		if generatorId == nil then return end
-		if type(generatorId) ~= 'string' then return end
-		if generatorId == '' then return end
-
-		local position = obj:GetPivot().Position
-		local genType, config = getGeneratorType(generatorId)
-		if not genType or not config then return end
-
-		local teamId = getGeneratorTeamId(generatorId)
-		if isGeneratorEnabled(genType, teamId) then
-			createESP(obj, genType, config, position, teamId)
-		end
-	end
-
-	local function findAllGenerators()
-		scanDescendants(workspace, function(obj)
-			pcall(processGeneratorAdornee, obj)
-		end, GeneratorESP)
-	end
-
-	local function refreshESP()
-		clearAllESP()
-		if GeneratorESP.Enabled then
-			findAllGenerators()
-		end
-	end
-
-	local updateTimer = 0
-
-	GeneratorESP = vape.Categories.Render:CreateModule({
-		Name = 'GeneratorESP',
-		Function = function(callback)
-			if callback then
-				findAllGenerators()
-				rebuildCompactGenerators()
-
-				GeneratorESP:Clean(workspace.DescendantAdded:Connect(function(obj)
-					if not GeneratorESP.Enabled or obj.Name ~= 'GeneratorAdornee' then return end
-					task.wait(0.2)
-					if not GeneratorESP.Enabled or not obj.Parent then return end
-					pcall(processGeneratorAdornee, obj)
-					rebuildCompactGenerators()
-				end))
-
-				GeneratorESP:Clean(runService.Heartbeat:Connect(function(dt)
-					if not GeneratorESP.Enabled then return end
-					updateTimer = updateTimer + dt
-					if updateTimer < 0.2 then return end
-					updateTimer = 0
-					if UIStyle.Value ~= 'Compact' then
-						resourceDrops = CollectionService:GetTagged('ItemDrop')
-					end
-					for generatorAdornee, ref in pairs(Reference) do
-						if generatorAdornee and generatorAdornee.Parent then
-							updateESP(generatorAdornee)
-						else
-							if ref.billboard then ref.billboard:Destroy() end
-							Reference[generatorAdornee] = nil
-						end
-					end
-					updateCompactUI()
-				end))
-
-				GeneratorESP:Clean(workspace.DescendantRemoving:Connect(function(obj)
-					if not GeneratorESP.Enabled then return end
-					if Reference[obj] then
-						if Reference[obj].billboard then Reference[obj].billboard:Destroy() end
-						Reference[obj] = nil
-					end
-				end))
-			else
-				clearAllESP()
-			end
-		end,
-		Tooltip = 'esp for generators showing timer and items count'
-	})
-
-	UIStyle = GeneratorESP:CreateDropdown({
-		Name = 'UI Style',
-		List = {'Original', 'Compact'},
-		Default = 'Original',
-		Function = function(val)
-			local isOriginal = val == 'Original'
-			if DiamondToggle then DiamondToggle.Object.Visible = isOriginal end
-			if EmeraldToggle then EmeraldToggle.Object.Visible = isOriginal end
-			if TeamGenToggle then TeamGenToggle.Object.Visible = isOriginal end
-			if ShowOwnTeamGen then ShowOwnTeamGen.Object.Visible = isOriginal and TeamGenToggle.Enabled end
-			if ShowEnemyTeamGen then ShowEnemyTeamGen.Object.Visible = isOriginal and TeamGenToggle.Enabled end
-			if CompactDiamondToggle then CompactDiamondToggle.Object.Visible = not isOriginal end
-			if CompactEmeraldToggle then CompactEmeraldToggle.Object.Visible = not isOriginal end
-			refreshESP()
-		end,
-		Tooltip = 'pick between the norm billboard esp on generators or a ui with timers for generators '
-	})
-
-	DiamondToggle = GeneratorESP:CreateToggle({
-		Name = 'Diamond',
-		Function = function() refreshESP() end,
-		Default = false,
-		Visible = true
-	})
-
-	EmeraldToggle = GeneratorESP:CreateToggle({
-		Name = 'Emerald',
-		Function = function() refreshESP() end,
-		Default = false,
-		Visible = true
-	})
-
-	CompactDiamondToggle = GeneratorESP:CreateToggle({
-		Name = 'Compact Diamond',
-		Default = false,
-		Visible = false,
-		Function = function()
-			refreshESP()
-		end
-	})
-
-	CompactEmeraldToggle = GeneratorESP:CreateToggle({
-		Name = 'Compact Emerald',
-		Default = false,
-		Visible = false,
-		Function = function()
-			refreshESP()
-		end
-	})
-
-	TeamGenToggle = GeneratorESP:CreateToggle({
-		Name = 'Team Generators',
-		Function = function(callback)
-			if ShowOwnTeamGen then ShowOwnTeamGen.Object.Visible = callback end
-			if ShowEnemyTeamGen then ShowEnemyTeamGen.Object.Visible = callback end
-			refreshESP()
-		end,
-		Default = true
-	})
-
-	ShowOwnTeamGen = GeneratorESP:CreateToggle({
-		Name = 'Show Own Team',
-		Function = function() refreshESP() end,
-		Default = false,
-		Visible = true
-	})
-
-	ShowEnemyTeamGen = GeneratorESP:CreateToggle({
-		Name = 'Show Enemy Teams',
-		Function = function() refreshESP() end,
-		Default = true,
-		Visible = true
-	})
-end)
 
 run(function()
 	local VictoriousKitSkins
@@ -16874,183 +15795,7 @@ run(function()
 	})
 end)
 
-run(function()
-	local AutoPlay
-	local Random
-	
-	local function isEveryoneDead()
-		return #bedwars.Store:getState().Party.members <= 0
-	end
-	
-	local function joinQueue()
-		if not bedwars.Store:getState().Game.customMatch and bedwars.Store:getState().Party.leader.userId == lplr.UserId and bedwars.Store:getState().Party.queueState == 0 then
-			if Random.Enabled then
-				local listofmodes = {}
-				for i, v in bedwars.QueueMeta do
-					if not v.disabled and not v.voiceChatOnly and not v.rankCategory then 
-						table.insert(listofmodes, i) 
-					end
-				end
-				bedwars.QueueController:joinQueue(listofmodes[math.random(1, #listofmodes)])
-			else
-				bedwars.QueueController:joinQueue(store.queueType)
-			end
-		end
-	end
-	
-	AutoPlay = vape.Categories.Utility:CreateModule({
-		Name = 'AutoPlay',
-		Function = function(callback)
-			if callback then
-				AutoPlay:Clean(vapeEvents.EntityDeathEvent.Event:Connect(function(deathTable)
-					if deathTable.finalKill and deathTable.entityInstance == lplr.Character and isEveryoneDead() and store.matchState ~= 2 then
-						joinQueue()
-					end
-				end))
-				AutoPlay:Clean(vapeEvents.MatchEndEvent.Event:Connect(function()
-					task.wait(1)
-					joinQueue()
-				end))
-			end
-		end,
-		Tooltip = 'auto queues after the match ends.'
-	})
-	Random = AutoPlay:CreateToggle({
-		Name = 'Random',
-	})
-end)
 
-run(function()
-	local RegionLock
-	local AllowedRegions
-	local lockLabel = 'next match'
-	local knownRegion
-	local fetchBusy = false
-	local nextFetch = 0
-	local warnedUnknown = false
-	local shorthand = {
-		AU = 'SEA', AUS = 'SEA', AUSTRALIA = 'SEA', NZ = 'SEA', OCE = 'SEA', OCEANIA = 'SEA',
-		AS = 'SEA', ASIA = 'SEA', SG = 'SEA', SGP = 'SEA',
-		US = 'NA', USA = 'NA', AMERICA = 'NA',
-		EUROPE = 'EU', GB = 'EU', UK = 'EU'
-	}
-
-	local function normalize(text)
-		text = tostring(text):gsub('%s+', ''):upper()
-		return shorthand[text] or text
-	end
-
-	local function currentRegion()
-		local okState, gameState = pcall(function()
-			return bedwars.Store:getState().Game
-		end)
-		local fromStore = okState and type(gameState) == 'table' and gameState.serverRegion or nil
-		if type(fromStore) == 'string' and fromStore ~= '' then
-			knownRegion = fromStore
-			return fromStore
-		end
-		if not knownRegion and not fetchBusy and os.clock() >= nextFetch then
-			fetchBusy = true
-			task.spawn(function()
-				local okFetch, reply = pcall(function()
-					return bedwars.Client:Get('FetchServerRegion'):CallServer()
-				end)
-				nextFetch = os.clock() + 5
-				fetchBusy = false
-				if okFetch and type(reply) == 'string' and reply ~= '' then
-					knownRegion = reply
-				end
-			end)
-		end
-		return knownRegion
-	end
-
-	local function regionOk()
-		if #AllowedRegions.ListEnabled == 0 then
-			return true
-		end
-		local region = currentRegion()
-		if not region then
-			return false
-		end
-		region = normalize(region)
-		for _, want in AllowedRegions.ListEnabled do
-			want = normalize(want)
-			if want ~= '' and region:sub(1, #want) == want then
-				return true
-			end
-		end
-		return false
-	end
-
-	RegionLock = vape.Categories.Utility:CreateModule({
-		Name = 'RegionLock',
-		Function = function(callback)
-			if callback then
-				readyGate.Claimed = true
-				warnedUnknown = false
-				repeat
-					if not readyGate.Held then
-						lockLabel = lplr:GetAttribute('PlayerConnected') and 'loaded' or 'next match'
-					else
-						local heldSince = readyGate.Started or os.clock()
-						if regionOk() then
-							lockLabel = knownRegion or 'any region'
-							readyGate.Release()
-						elseif knownRegion then
-							lockLabel = 'wrong region ('..knownRegion..')'
-						elseif os.clock() - heldSince >= 20 then
-							if not warnedUnknown then
-								warnedUnknown = true
-								notif('RegionLock', 'couldnt read this server region so ur loadin in anyway', 8, 'warning')
-							end
-							lockLabel = 'unknown region'
-							readyGate.Release()
-						else
-							lockLabel = 'finding region'
-						end
-					end
-					task.wait(0.5)
-				until not RegionLock.Enabled
-			else
-				readyGate.Release()
-				lockLabel = 'loaded'
-				readyGate.Claimed = false
-			end
-		end,
-		ExtraText = function()
-			return lockLabel
-		end,
-		Tooltip = 'keeps u outta matches that aint in the regions u picked bedwars only has NA,EU adn SEA n picks urs from ur account country so this only skips the odd server in another region'
-	})
-
-	AllowedRegions = RegionLock:CreateTextList({
-		Name = 'Regions',
-		Placeholder = 'NA / EU / SEA',
-		Default = {'NA', 'EU', 'SEA'},
-		Function = function()
-			if not AllowedRegions then
-				return
-			end
-			for i, v in AllowedRegions.List do
-				AllowedRegions.List[i] = v:gsub('%s+', ''):upper()
-			end
-			for i, v in AllowedRegions.ListEnabled do
-				AllowedRegions.ListEnabled[i] = v:gsub('%s+', ''):upper()
-			end
-		end,
-		Tooltip = 'turn off the regions u dont want. AUS OCE AU n NZ count as SEA n US counts as NA. leavin them all on lets anything in'
-	})
-
-	task.spawn(function()
-		repeat
-			task.wait()
-		until vape.Loaded ~= false
-		if vape.Loaded and not readyGate.Claimed then
-			readyGate.Release()
-		end
-	end)
-end)
 
 run(function()
 	local AutoVoidDrop
@@ -17780,14 +16525,14 @@ run(function()
 	end
 
 	local function cleanupVisuals()
-		destroyNamed(PlayerGui, "aerov4KitRender")
-		destroyNamed(PlayerGui, "aerov4KitIcon")
-		destroyNamed(PlayerGui, "aerov4KitLevel")
-		destroyNamed(PlayerGui, "aerov4LastKit")
+		destroyNamed(PlayerGui, "NYXKitRender")
+		destroyNamed(PlayerGui, "NYXKitIcon")
+		destroyNamed(PlayerGui, "NYXKitLevel")
+		destroyNamed(PlayerGui, "NYXLastKit")
 	end
 
 	local function cleanupLastMatch()
-		destroyNamed(PlayerGui, "aerov4LastKit")
+		destroyNamed(PlayerGui, "NYXLastKit")
 	end
 
 	local function extractHistory(payload)
@@ -18112,10 +16857,10 @@ run(function()
 		if not host or not host.Parent then return end
 		unclip(host)
 
-		local icon = host:FindFirstChild("aerov4KitRender")
+		local icon = host:FindFirstChild("NYXKitRender")
 		if not icon then
 			icon = Instance.new("ImageLabel")
-			icon.Name = "aerov4KitRender"
+			icon.Name = "NYXKitRender"
 			icon.AnchorPoint = Vector2.new(1, 0.5)
 			icon.Position = UDim2.new(1.05, 0, 0.5, 0)
 			icon.Size = UDim2.new(1.5, 0, 1.5, 0)
@@ -18148,10 +16893,10 @@ run(function()
 		if not nameLabel then return end
 		unclip(nameLabel)
 
-		local levelLabel = nameLabel:FindFirstChild("aerov4KitLevel")
+		local levelLabel = nameLabel:FindFirstChild("NYXKitLevel")
 		if not levelLabel then
 			levelLabel = Instance.new("TextLabel")
-			levelLabel.Name = "aerov4KitLevel"
+			levelLabel.Name = "NYXKitLevel"
 			levelLabel.AnchorPoint = Vector2.new(0, 0.5)
 			levelLabel.Position = UDim2.new(1, 5, 0.5, 0)
 			levelLabel.Size = UDim2.fromOffset(44, 15)
@@ -18177,7 +16922,7 @@ run(function()
 	local function createLastMatchBadge(host, plr, slot)
 		slot = slot or 1
 		local badge = Instance.new("Frame")
-		badge.Name = "aerov4LastKit"
+		badge.Name = "NYXLastKit"
 		badge:SetAttribute("UserId", plr.UserId)
 		badge:SetAttribute("Slot", slot)
 		badge.AnchorPoint = Vector2.new(0.5, 0.5)
@@ -18226,7 +16971,7 @@ run(function()
 
 		if not (LastKitToggle and LastKitToggle.Enabled) then
 			for _, old in host:GetChildren() do
-				if old.Name == "aerov4LastKit" then
+				if old.Name == "NYXLastKit" then
 					old:Destroy()
 				end
 			end
@@ -18238,7 +16983,7 @@ run(function()
 		local count = LastKitCount and LastKitCount.Value or 1
 		local badges = {}
 		for _, obj in host:GetChildren() do
-			if obj.Name == "aerov4LastKit" then
+			if obj.Name == "NYXLastKit" then
 				local slot = obj:GetAttribute("Slot") or 1
 				if slot > count or badges[slot] then
 					obj:Destroy()
@@ -18324,9 +17069,9 @@ run(function()
 	end
 
 	local function ensureParty(host, plr)
-		local icon = host and host:FindFirstChild("aerov4KitRender")
+		local icon = host and host:FindFirstChild("NYXKitRender")
 		if not icon then return end
-		local badge = icon:FindFirstChild("aerov4Party")
+		local badge = icon:FindFirstChild("NYXParty")
 		local num = PartyToggle and PartyToggle.Enabled and currentPartyNumbers[plr.UserId]
 		if not num then
 			if badge then
@@ -18336,7 +17081,7 @@ run(function()
 		end
 		if not badge then
 			badge = Instance.new("TextLabel")
-			badge.Name = "aerov4Party"
+			badge.Name = "NYXParty"
 			badge.AnchorPoint = Vector2.new(1, 0)
 			badge.Position = UDim2.new(1, 2, 0, -2)
 			badge.Size = UDim2.fromOffset(16, 16)
@@ -18373,9 +17118,9 @@ run(function()
 			local mine, theirs = player:GetAttribute("Team"), plr:GetAttribute("Team")
 			if mine and theirs and mine == theirs then
 				local mateHost = findHost(render)
-				destroyNamed(mateHost, "aerov4KitRender")
-				destroyNamed(mateHost, "aerov4KitLevel")
-				destroyNamed(mateHost, "aerov4LastKit")
+				destroyNamed(mateHost, "NYXKitRender")
+				destroyNamed(mateHost, "NYXKitLevel")
+				destroyNamed(mateHost, "NYXLastKit")
 			end
 			return
 		end
@@ -18387,7 +17132,7 @@ run(function()
 		if LevelToggle and LevelToggle.Enabled then
 			ensureLevel(host, plr)
 		else
-			destroyNamed(host, "aerov4KitLevel")
+			destroyNamed(host, "NYXKitLevel")
 		end
 		ensureLastMatch(host, plr)
 		if PartyToggle and PartyToggle.Enabled and lastKitCache[plr.UserId] == nil then
@@ -18572,7 +17317,7 @@ run(function()
 			elseif ct == 'unverified' then c.impossible += 1
 			else c.mod += 1 end
 		end
-		getgenv()._aerov4_staffCounts = c
+		getgenv()._NYX_staffCounts = c
 		vapeEvents.StaffCountUpdate:Fire()
 	end
 
@@ -19402,35 +18147,6 @@ run(function()
 	})
 end)
 
-run(function()
-	local NetworkTP
-	NetworkTP = vape.Categories.Utility:CreateModule({
-		Name = 'NetworkTP',
-		Function = function(callback)
-			if callback then
-				local items = collection('ItemDrop', NetworkTP)
-				repeat
-					if entitylib.isAlive then
-						local localPosition = entitylib.character.RootPart.Position
-						local humanoidHealth = entitylib.character.Humanoid.Health
-						local currentTime = tick()
-
-						for _, v in pairs(items) do
-							local dropTime = v:GetAttribute('ClientDropTime')
-							if not dropTime then continue end
-							if (currentTime - dropTime) < 2 then continue end
-							if isnetworkowner(v) and humanoidHealth > 0 then
-								v.CFrame = CFrame.new(localPosition - Vector3.new(0, 3, 0))
-							end
-						end
-					end
-					task.wait(0.1)
-				until not NetworkTP.Enabled
-			end
-		end,
-		Tooltip = 'network ownership teleports item drops to you'
-	})
-end)
 
 run(function()
     local AntiSuffo
@@ -20911,96 +19627,6 @@ run(function()
     end)
 end)
 
-run(function()
-	local FPSBoost
-	local Kill
-	local Visualizer
-	local effects, util = {}, {}
-	local originalAddGameNametag
-	local nametagHooked = false
-	
-	FPSBoost = vape.Categories.World:CreateModule({
-		Name = 'FPSBoost',
-		Function = function(callback)
-			if callback then
-				if Kill.Enabled then
-					for i, v in bedwars.KillEffectController.killEffects do
-						if not i:find('Custom') then
-							effects[i] = v
-							bedwars.KillEffectController.killEffects[i] = {
-								new = function() 
-									return {
-										onKill = function() end, 
-										isPlayDefaultKillEffect = function() 
-											return true 
-										end
-									} 
-								end
-							}
-						end
-					end
-				end
-
-			if Visualizer.Enabled then
-				local keepKeys = {'beam', 'Beam', 'projectile', 'Projectile', 'draw', 'Draw', 'line', 'Line', 'ray', 'Ray', 'arc', 'Arc'}
-				for i, v in bedwars.VisualizerUtils do
-					local keep = false
-					for _, k in keepKeys do
-						if tostring(i):lower():find(k:lower()) then
-							keep = true
-							break
-						end
-					end
-					if not keep then
-						util[i] = v
-						bedwars.VisualizerUtils[i] = function() end
-					end
-				end
-			end
-
-			else
-				for i, v in effects do 
-					bedwars.KillEffectController.killEffects[i] = v 
-				end
-				
-				for i, v in util do 
-					bedwars.VisualizerUtils[i] = v 
-				end
-				
-				if nametagHooked and originalAddGameNametag then
-					bedwars.NametagController.addGameNametag = originalAddGameNametag
-					nametagHooked = false
-				end
-				
-				table.clear(effects)
-				table.clear(util)
-			end
-		end,
-		Tooltip = 'improves fps - well tries'
-	})
-	
-	Kill = FPSBoost:CreateToggle({
-		Name = 'Kill Effects',
-		Function = function()
-			if FPSBoost.Enabled then
-				FPSBoost:Toggle()
-				FPSBoost:Toggle()
-			end
-		end,
-		Default = true
-	})
-	
-	Visualizer = FPSBoost:CreateToggle({
-		Name = 'Visualizer',
-		Function = function()
-			if FPSBoost.Enabled then
-				FPSBoost:Toggle()
-				FPSBoost:Toggle()
-			end
-		end,
-		Default = true
-	})
-end)
 
 run(function()
 	local ShadowRemover
@@ -21050,596 +19676,7 @@ run(function()
 	})
 end)
 
-run(function()
-	local RemoveNeon = {Enabled = false}
-	local neonConnection
-	local safetyLoop
-	local originalMaterials = {}
-	local processedParts = {}
-	local lastCleanup = 0
-	
-	local function cleanupDeadReferences()
-		local count = 0
-		for obj, _ in pairs(originalMaterials) do
-			if not obj or not obj.Parent then
-				originalMaterials[obj] = nil
-				processedParts[obj] = nil
-			end
-			count = count + 1
-			if count % 100 == 0 then
-				task.wait()
-			end
-		end
-	end
-	
-	local function removeNeonFromPart(obj)
-		if obj:IsA("BasePart") then
-			if obj.Material == Enum.Material.Neon then
-				if not originalMaterials[obj] then
-					originalMaterials[obj] = {
-						Material = obj.Material,
-						Reflectance = obj.Reflectance
-					}
-				end
-				pcall(function()
-					obj.Material = Enum.Material.Plastic
-					obj.Reflectance = 0
-				end)
-			end
-		end
-	end
-	
-	local function restoreNeon()
-		for obj, data in pairs(originalMaterials) do
-			if obj and obj.Parent then
-				pcall(function()
-					obj.Material = data.Material
-					obj.Reflectance = data.Reflectance
-				end)
-			end
-		end
-		table.clear(originalMaterials)
-		table.clear(processedParts)
-	end
-	
-	local function batchProcessParts(parts, batchSize)
-		local count = 0
-		for i, part in ipairs(parts) do
-			if part and part.Parent then
-				removeNeonFromPart(part)
-				count = count + 1
-			end
-			if i % batchSize == 0 then
-				task.wait()
-			end
-		end
-		return count
-	end
-	
-	RemoveNeon = vape.Categories.World:CreateModule({
-		Name = 'RemoveNeon',
-		Function = function(callback)
-			if callback then
-				task.spawn(function()
-					local allParts = {}
-					scanDescendants(workspace, function(v)
-						if v:IsA("BasePart") then
-							removeNeonFromPart(v)
-						end
-					end, RemoveNeon)
-				end)
-				
-				neonConnection = workspace.DescendantAdded:Connect(function(obj)
-					if RemoveNeon.Enabled then
-						removeNeonFromPart(obj)
-					end
-				end)
-				
-				safetyLoop = task.spawn(function()
-					while RemoveNeon.Enabled do
-						task.wait(30)
-						if RemoveNeon.Enabled then
-							cleanupDeadReferences()
-						end
-					end
-				end)
-			else
-				if neonConnection then
-					neonConnection:Disconnect()
-					neonConnection = nil
-				end
-				if safetyLoop then
-					task.cancel(safetyLoop)
-					safetyLoop = nil
-				end
-				restoreNeon()
-			end
-		end,
-	})
-end)
 
-run(function()
-	local PotatoMode
-	local Mode
-	local originalProperties = {}
-	local blockMonitorConnections = {}
-	local processedBlocks = {}
-
-	local blockColors = {
-		["wool_white"] = Color3.fromRGB(255, 255, 255),
-		["wool_red"] = Color3.fromRGB(255, 50, 50),
-		["wool_green"] = Color3.fromRGB(50, 255, 50),
-		["wool_blue"] = Color3.fromRGB(50, 100, 255),
-		["wool_yellow"] = Color3.fromRGB(255, 255, 50),
-		["wool_orange"] = Color3.fromRGB(255, 150, 50),
-		["wool_purple"] = Color3.fromRGB(180, 50, 255),
-		["wool_pink"] = Color3.fromRGB(255, 100, 200),
-		["wool_black"] = Color3.fromRGB(50, 50, 50),
-		["wool_cyan"] = Color3.fromRGB(50, 255, 255),
-		["wool_magenta"] = Color3.fromRGB(255, 50, 150),
-		["wool_lime"] = Color3.fromRGB(150, 255, 50),
-		["wool_brown"] = Color3.fromRGB(150, 75, 0),
-		["wool_light_blue"] = Color3.fromRGB(100, 200, 255),
-		["wool_gray"] = Color3.fromRGB(150, 150, 150),
-		["wool_builder"] = Color3.fromRGB(200, 200, 200),
-		["wool_shear"] = Color3.fromRGB(200, 200, 200),
-		["wool"] = Color3.fromRGB(200, 200, 200),
-		["clay_white"] = Color3.fromRGB(255, 255, 255),
-		["clay_black"] = Color3.fromRGB(50, 50, 50),
-		["clay_blue"] = Color3.fromRGB(50, 100, 255),
-		["clay_dark_brown"] = Color3.fromRGB(100, 60, 30),
-		["clay_dark_green"] = Color3.fromRGB(30, 100, 30),
-		["clay_gray"] = Color3.fromRGB(150, 150, 150),
-		["clay_green"] = Color3.fromRGB(50, 255, 50),
-		["clay_light_brown"] = Color3.fromRGB(200, 170, 120),
-		["clay_light_green"] = Color3.fromRGB(150, 255, 150),
-		["clay_orange"] = Color3.fromRGB(255, 150, 50),
-		["clay_pink"] = Color3.fromRGB(255, 100, 200),
-		["clay_purple"] = Color3.fromRGB(180, 50, 255),
-		["clay_red"] = Color3.fromRGB(255, 50, 50),
-		["clay_tan"] = Color3.fromRGB(210, 180, 140),
-		["clay_yellow"] = Color3.fromRGB(255, 255, 50),
-		["clay"] = Color3.fromRGB(220, 180, 140),
-		["wood_plank_spruce"] = Color3.fromRGB(222, 184, 135),
-		["wood_plank_birch"] = Color3.fromRGB(230, 220, 190),
-		["wood_plank_maple"] = Color3.fromRGB(200, 140, 90),
-		["wood_plank_oak"] = Color3.fromRGB(180, 140, 100),
-		["wood_plank_oak_builder"] = Color3.fromRGB(180, 140, 100),
-		["oak_log"] = Color3.fromRGB(120, 90, 60),
-		["birch_log"] = Color3.fromRGB(220, 210, 180),
-		["spruce_log"] = Color3.fromRGB(100, 75, 50),
-		["hickory_log"] = Color3.fromRGB(140, 100, 60),
-		["wood"] = Color3.fromRGB(180, 140, 100),
-		["stone"] = Color3.fromRGB(150, 150, 150),
-		["stone_brick"] = Color3.fromRGB(140, 140, 140),
-		["stone_brick_builder"] = Color3.fromRGB(140, 140, 140),
-		["stone_slab"] = Color3.fromRGB(160, 160, 160),
-		["stone_pillar"] = Color3.fromRGB(160, 160, 160),
-		["stone_tiles"] = Color3.fromRGB(160, 160, 160),
-		["stone_player_block"] = Color3.fromRGB(150, 150, 150),
-		["andesite"] = Color3.fromRGB(150, 150, 150),
-		["andesite_polished"] = Color3.fromRGB(160, 160, 160),
-		["diorite"] = Color3.fromRGB(220, 220, 220),
-		["diorite_polished"] = Color3.fromRGB(230, 230, 230),
-		["granite"] = Color3.fromRGB(180, 100, 80),
-		["granite_polished"] = Color3.fromRGB(190, 110, 90),
-		["cobblestone"] = Color3.fromRGB(150, 150, 150),
-		["limestone"] = Color3.fromRGB(210, 200, 180),
-		["marble"] = Color3.fromRGB(235, 235, 235),
-		["marble_pillar"] = Color3.fromRGB(235, 235, 235),
-		["slate_brick"] = Color3.fromRGB(90, 95, 100),
-		["slate_tiles"] = Color3.fromRGB(90, 95, 100),
-		["volatile_stone"] = Color3.fromRGB(150, 150, 150),
-		["obsidian"] = Color3.fromRGB(50, 30, 80),
-		["bedrock"] = Color3.fromRGB(80, 80, 80),
-		["tnt"] = Color3.fromRGB(255, 50, 50),
-		["sandstone"] = Color3.fromRGB(220, 200, 150),
-		["sandstone_polished"] = Color3.fromRGB(225, 205, 155),
-		["sandstone_smooth"] = Color3.fromRGB(225, 205, 155),
-		["red_sandstone"] = Color3.fromRGB(190, 110, 60),
-		["red_sandstone_polished"] = Color3.fromRGB(195, 115, 65),
-		["red_sandstone_smooth"] = Color3.fromRGB(195, 115, 65),
-		["sand"] = Color3.fromRGB(220, 200, 150),
-		["red_sand"] = Color3.fromRGB(190, 110, 60),
-		["glass"] = Color3.fromRGB(200, 230, 230),
-		["magic_glass"] = Color3.fromRGB(150, 200, 255),
-		["diamond"] = Color3.fromRGB(100, 220, 220),
-		["diamond_block"] = Color3.fromRGB(100, 220, 220),
-		["diamond_ore"] = Color3.fromRGB(100, 220, 220),
-		["emerald"] = Color3.fromRGB(50, 255, 50),
-		["emerald_block"] = Color3.fromRGB(50, 255, 50),
-		["emerald_ore"] = Color3.fromRGB(50, 255, 50),
-		["iron"] = Color3.fromRGB(220, 220, 220),
-		["iron_block"] = Color3.fromRGB(220, 220, 220),
-		["iron_ore"] = Color3.fromRGB(200, 200, 200),
-		["iron_ore_mesh_block"] = Color3.fromRGB(200, 200, 200),
-		["gold"] = Color3.fromRGB(255, 215, 0),
-		["gold_block"] = Color3.fromRGB(255, 215, 0),
-		["copper_block"] = Color3.fromRGB(184, 115, 51),
-		["steel_block"] = Color3.fromRGB(170, 170, 180),
-		["galactite"] = Color3.fromRGB(100, 80, 160),
-		["galactite_brick"] = Color3.fromRGB(100, 80, 160),
-		["crystal_ore"] = Color3.fromRGB(180, 150, 255),
-		["guilded_iron"] = Color3.fromRGB(230, 200, 100),
-		["ceramic"] = Color3.fromRGB(230, 140, 60),
-		["aquamarine_lantern"] = Color3.fromRGB(80, 220, 200),
-		["barrel"] = Color3.fromRGB(140, 95, 55),
-		["bookshelf"] = Color3.fromRGB(150, 100, 60),
-		["brick"] = Color3.fromRGB(160, 80, 60),
-		["grass"] = Color3.fromRGB(50, 255, 50),
-		["moss_block"] = Color3.fromRGB(50, 150, 50),
-		["dirt"] = Color3.fromRGB(120, 80, 50),
-		["void_dirt"] = Color3.fromRGB(60, 40, 25),
-		["void_grass"] = Color3.fromRGB(25, 80, 25),
-		["ice"] = Color3.fromRGB(180, 220, 255),
-		["snow"] = Color3.fromRGB(255, 255, 255),
-		["snow_pile"] = Color3.fromRGB(255, 255, 255),
-		["glowstone"] = Color3.fromRGB(255, 240, 150),
-		["magma_block"] = Color3.fromRGB(200, 80, 30),
-		["slime_block"] = Color3.fromRGB(120, 230, 120),
-		["gum_block"] = Color3.fromRGB(255, 150, 200),
-		["invisible_block"] = Color3.fromRGB(255, 255, 255),
-		["void_block"] = Color3.fromRGB(20, 20, 20),
-		["smoke_block"] = Color3.fromRGB(130, 130, 130),
-		["cotton_candy_block"] = Color3.fromRGB(255, 200, 230),
-		["cotton_candy_block_blue"] = Color3.fromRGB(150, 200, 255),
-		["cotton_candy_block_orange"] = Color3.fromRGB(255, 180, 120),
-		["cotton_candy_block_pink"] = Color3.fromRGB(255, 150, 200),
-		["cotton_candy_block_yellow"] = Color3.fromRGB(255, 240, 150),
-		["blue_tile"] = Color3.fromRGB(50, 100, 255),
-		["concrete_green"] = Color3.fromRGB(50, 180, 50),
-		["concrete"] = Color3.fromRGB(180, 180, 180),
-		["bed"] = Color3.fromRGB(200, 50, 50),
-		["og_bed"] = Color3.fromRGB(200, 50, 50),
-		["royale_bed"] = Color3.fromRGB(200, 50, 50),
-		["fake_bed"] = Color3.fromRGB(200, 50, 50),
-		["barrier"] = Color3.fromRGB(255, 0, 0),
-		["ladder"] = Color3.fromRGB(150, 100, 50),
-		["vine_ladder"] = Color3.fromRGB(60, 120, 60),
-		["scaffold"] = Color3.fromRGB(180, 140, 100),
-		["christmas_scaffold"] = Color3.fromRGB(180, 140, 100),
-		["drawbridge"] = Color3.fromRGB(150, 110, 70),
-		["christmas_drawbridge"] = Color3.fromRGB(150, 110, 70),
-		["haybale"] = Color3.fromRGB(230, 200, 100),
-		["purple_hay_bale"] = Color3.fromRGB(180, 50, 255),
-	}
-
-	local cachedColors = {}
-
-	local function getBlockColor(blockName)
-		if cachedColors[blockName] then
-			return cachedColors[blockName]
-		end
-
-		if blockColors[blockName] then
-			cachedColors[blockName] = blockColors[blockName]
-			return blockColors[blockName]
-		end
-
-		local lowerName = blockName:lower()
-
-		if blockColors[lowerName] then
-			cachedColors[blockName] = blockColors[lowerName]
-			return blockColors[lowerName]
-		end
-
-		if lowerName:find("wool", 1, true) then
-			for key, color in pairs(blockColors) do
-				if key:find("wool", 1, true) and lowerName:find(key, 1, true) then
-					cachedColors[blockName] = color
-					return color
-				end
-			end
-			cachedColors[blockName] = blockColors["wool"]
-			return blockColors["wool"]
-		end
-
-		if lowerName:find("clay", 1, true) then
-			for key, color in pairs(blockColors) do
-				if key:find("clay", 1, true) and lowerName:find(key, 1, true) then
-					cachedColors[blockName] = color
-					return color
-				end
-			end
-			cachedColors[blockName] = blockColors["clay"]
-			return blockColors["clay"]
-		end
-
-		for name, color in pairs(blockColors) do
-			if lowerName:find(name, 1, true) then
-				cachedColors[blockName] = color
-				return color
-			end
-		end
-
-		local defaultColor = Color3.fromRGB(150, 150, 150)
-		cachedColors[blockName] = defaultColor
-		return defaultColor
-	end
-
-	local function cleanupDeadReferences()
-		for block, _ in pairs(originalProperties) do
-			if not block or not block.Parent then
-				originalProperties[block] = nil
-				processedBlocks[block] = nil
-			end
-		end
-	end
-
-	local function simplifyBlock(block)
-		if not block or not block.Parent or processedBlocks[block] then return end
-
-		if not originalProperties[block] then
-			originalProperties[block] = {
-				Material = block.Material,
-				Color = block.Color,
-				TextureID = block:IsA("MeshPart") and block.TextureID or nil,
-				Textures = {}
-			}
-
-			for _, child in block:GetChildren() do
-				if child:IsA("Texture") or child:IsA("Decal") then
-					table.insert(originalProperties[block].Textures, {
-						Class = child.ClassName,
-						Texture = child.Texture,
-						StudsPerTileU = child:IsA("Texture") and child.StudsPerTileU or nil,
-						StudsPerTileV = child:IsA("Texture") and child.StudsPerTileV or nil,
-						Face = child.Face,
-						Transparency = child.Transparency,
-						Color3 = child:IsA("Decal") and child.Color3 or nil
-					})
-				end
-			end
-		end
-
-		block.Material = Enum.Material.SmoothPlastic
-		block.Color = getBlockColor(block.Name)
-
-		for _, child in block:GetChildren() do
-			if child:IsA("Texture") or child:IsA("Decal") then
-				child:Destroy()
-			end
-		end
-
-		if block:IsA("MeshPart") and block.TextureID ~= "" then
-			block.TextureID = ""
-		end
-
-		processedBlocks[block] = true
-	end
-
-	local function restoreBlock(block)
-		if not block or not block.Parent then
-			originalProperties[block] = nil
-			processedBlocks[block] = nil
-			return
-		end
-
-		local props = originalProperties[block]
-		if not props then return end
-
-		block.Material = props.Material or Enum.Material.Plastic
-		block.Color = props.Color or Color3.fromRGB(255, 255, 255)
-
-		if props.TextureID and block:IsA("MeshPart") then
-			block.TextureID = props.TextureID
-		end
-
-		for _, textureProps in props.Textures do
-			local newTexture
-			if textureProps.Class == "Texture" then
-				newTexture = Instance.new("Texture")
-				newTexture.StudsPerTileU = textureProps.StudsPerTileU or 1
-				newTexture.StudsPerTileV = textureProps.StudsPerTileV or 1
-			else
-				newTexture = Instance.new("Decal")
-				newTexture.Color3 = textureProps.Color3 or Color3.fromRGB(255, 255, 255)
-			end
-
-			newTexture.Texture = textureProps.Texture or ""
-			newTexture.Face = textureProps.Face or Enum.NormalId.Front
-			newTexture.Transparency = textureProps.Transparency or 0
-			newTexture.Parent = block
-		end
-
-		originalProperties[block] = nil
-		processedBlocks[block] = nil
-	end
-
-	local function isTargetBlock(obj)
-		if not obj:IsA("BasePart") then return false end
-
-		local name = obj.Name
-
-		if blockColors[name] then return true end
-
-		local lowerName = name:lower()
-		return lowerName:find("wool", 1, true) or
-		       lowerName:find("clay", 1, true) or
-		       lowerName:find("wood", 1, true) or
-		       lowerName:find("log", 1, true) or
-		       lowerName:find("stone", 1, true) or
-		       lowerName:find("brick", 1, true) or
-		       lowerName:find("glass", 1, true) or
-		       lowerName:find("plank", 1, true) or
-		       lowerName:find("bed", 1, true) or
-		       lowerName:find("obsidian", 1, true) or
-		       lowerName:find("sand", 1, true) or
-		       lowerName:find("tnt", 1, true) or
-		       lowerName:find("barrier", 1, true) or
-		       lowerName:find("magic", 1, true) or
-		       lowerName:find("concrete", 1, true) or
-		       lowerName:find("diamond", 1, true) or
-		       lowerName:find("emerald", 1, true) or
-		       lowerName:find("iron", 1, true) or
-		       lowerName:find("gold", 1, true) or
-		       lowerName:find("copper", 1, true) or
-		       lowerName:find("steel", 1, true) or
-		       lowerName:find("ore", 1, true) or
-		       lowerName:find("marble", 1, true) or
-		       lowerName:find("slate", 1, true) or
-		       lowerName:find("granite", 1, true) or
-		       lowerName:find("andesite", 1, true) or
-		       lowerName:find("diorite", 1, true) or
-		       lowerName:find("grass", 1, true) or
-		       lowerName:find("dirt", 1, true) or
-		       lowerName:find("ice", 1, true) or
-		       lowerName:find("snow", 1, true) or
-		       lowerName:find("moss", 1, true) or
-		       lowerName:find("slime", 1, true) or
-		       lowerName:find("scaffold", 1, true) or
-		       lowerName:find("ladder", 1, true) or
-		       lowerName:find("tile", 1, true) or
-		       lowerName:find("cotton_candy", 1, true) or
-		       lowerName:find("_block", 1, true) or
-		       obj:IsA("Seat")
-	end
-
-	local function processExistingBlocks(simplify)
-		scanDescendants(workspace, function(obj)
-			if isTargetBlock(obj) then
-				if simplify then
-					simplifyBlock(obj)
-				else
-					restoreBlock(obj)
-				end
-			end
-		end)
-
-		if not simplify then
-			task.delay(2, cleanupDeadReferences)
-		end
-	end
-
-	local function setupBlockMonitor(simplify)
-		for _, conn in blockMonitorConnections do
-			conn:Disconnect()
-		end
-		table.clear(blockMonitorConnections)
-
-		if not simplify then return end
-
-		local mainConn = workspace.DescendantAdded:Connect(function(descendant)
-			if isTargetBlock(descendant) then
-				task.defer(function()
-					if descendant and descendant.Parent then
-						simplifyBlock(descendant)
-					end
-				end)
-			end
-		end)
-
-		table.insert(blockMonitorConnections, mainConn)
-
-		local lastCleanup = 0
-		local cleanupConn = runService.Heartbeat:Connect(function()
-			local now = tick()
-			if now - lastCleanup >= 5 then
-				lastCleanup = now
-				cleanupDeadReferences()
-			end
-		end)
-
-		table.insert(blockMonitorConnections, cleanupConn)
-	end
-
-	local ntReference = {}
-	local function ntRemember(obj, property)
-		local props = ntReference[obj]
-		if not props then
-			props = {}
-			ntReference[obj] = props
-		end
-		if props[property] == nil then
-			props[property] = obj[property]
-		end
-	end
-	local function ntStrip(obj)
-		if obj:IsA('Decal') then
-			ntRemember(obj, 'Transparency')
-			obj.Transparency = 1
-			return
-		end
-		if obj:IsA('SurfaceAppearance') then
-			ntRemember(obj, 'Parent')
-			obj.Parent = nil
-			return
-		end
-		if obj:IsA('SpecialMesh') then
-			ntRemember(obj, 'TextureId')
-			obj.TextureId = ''
-			return
-		end
-		if obj:IsA('BasePart') then
-			if obj:IsA('MeshPart') then
-				ntRemember(obj, 'TextureID')
-				obj.TextureID = ''
-			end
-			ntRemember(obj, 'Material')
-			obj.Material = Enum.Material.SmoothPlastic
-		end
-	end
-	local function ntRestore()
-		for i, v in ntReference do
-			pcall(function()
-				for property, value in v do
-					i[property] = value
-				end
-			end)
-		end
-		table.clear(ntReference)
-	end
-	local function ntScan()
-		local descendants = store.map:GetDescendants()
-		for i, v in descendants do
-			if not PotatoMode.Enabled or Mode.Value ~= 'No Texture' then return end
-			ntStrip(v)
-			if i % 500 == 0 then
-				task.wait()
-			end
-		end
-	end
-
-	PotatoMode = vape.Categories.World:CreateModule({
-		Name = 'PotatoMode',
-		Function = function(callback)
-			if callback then
-				if Mode.Value == 'No Texture' then
-					repeat task.wait() until store.map or not PotatoMode.Enabled
-					if not PotatoMode.Enabled then return end
-					PotatoMode:Clean(store.map.DescendantAdded:Connect(function(obj)
-						task.defer(ntStrip, obj)
-					end))
-					ntScan()
-				else
-					processExistingBlocks(true)
-					setupBlockMonitor(true)
-				end
-			else
-				processExistingBlocks(false)
-				for _, conn in blockMonitorConnections do
-					conn:Disconnect()
-				end
-				table.clear(blockMonitorConnections)
-				table.clear(cachedColors)
-				cleanupDeadReferences()
-				ntRestore()
-			end
-		end,
-	})
-	Mode = PotatoMode:CreateDropdown({
-		Name = 'Mode',
-		List = {'Original', 'No Texture'},
-		Default = 'Original',
-		Tooltip = 'Original = flat colored blocks, No Texture = strips everything off the map',
-		Function = function(val)
-			if PotatoMode.Enabled then
-				PotatoMode:Toggle()
-				PotatoMode:Toggle()
-			end
-		end
-	})
-end)
 
 run(function()
 	local Clutch
@@ -23241,7 +21278,7 @@ run(function()
 		close.Position = UDim2.new(1, -35, 0, 9)
 		close.BackgroundColor3 = Color3.new(1, 1, 1)
 		close.BackgroundTransparency = 1
-		close.Image = getcustomasset('aerov4/assets/new/close.png')
+		close.Image = getcustomasset('NYX/assets/new/close.png')
 		close.ImageColor3 = color.Light(uipallet.Text, 0.2)
 		close.ImageTransparency = 0.5
 		close.AutoButtonColor = false
@@ -23356,7 +21393,7 @@ run(function()
 		searchicon.Size = UDim2.fromOffset(14, 14)
 		searchicon.Position = UDim2.new(1, -26, 0, 8)
 		searchicon.BackgroundTransparency = 1
-		searchicon.Image = getcustomasset('aerov4/assets/new/search.png')
+		searchicon.Image = getcustomasset('NYX/assets/new/search.png')
 		searchicon.ImageColor3 = color.Light(uipallet.Main, 0.37)
 		searchicon.Parent = searchbkg
 		local children = Instance.new('ScrollingFrame')
@@ -23497,7 +21534,7 @@ run(function()
 		textbuttonicon.Position = UDim2.fromScale(0.5, 0.5)
 		textbuttonicon.AnchorPoint = Vector2.new(0.5, 0.5)
 		textbuttonicon.BackgroundTransparency = 1
-		textbuttonicon.Image = getcustomasset('aerov4/assets/new/add.png')
+		textbuttonicon.Image = getcustomasset('NYX/assets/new/add.png')
 		textbuttonicon.ImageColor3 = Color3.fromHSV(0.46, 0.96, 0.52)
 		textbuttonicon.Parent = textbutton
 		local childrenlist = Instance.new('Frame')
@@ -23590,7 +21627,7 @@ run(function()
 			close.Position = UDim2.new(1, -23, 0, 6)
 			close.BackgroundColor3 = Color3.new(1, 1, 1)
 			close.BackgroundTransparency = 1
-			close.Image = getcustomasset('aerov4/assets/new/closemini.png')
+			close.Image = getcustomasset('NYX/assets/new/closemini.png')
 			close.ImageColor3 = color.Light(uipallet.Text, 0.2)
 			close.ImageTransparency = 0.5
 			close.AutoButtonColor = false
@@ -24562,7 +22599,7 @@ run(function()
 						Size = UDim2.new(1, 89, 1, 52),
 						Position = UDim2.fromOffset(-48, -31),
 						BackgroundTransparency = 1,
-						Image = getcustomasset('aerov4/assets/new/blur.png'),
+						Image = getcustomasset('NYX/assets/new/blur.png'),
 						ScaleType = Enum.ScaleType.Slice,
 						SliceCenter = Rect.new(52, 31, 261, 502)
 					}),
@@ -29195,7 +27232,7 @@ run(function()
 		blur.Size = UDim2.new(1, 89, 1, 52)
 		blur.Position = UDim2.fromOffset(-48, -31)
 		blur.BackgroundTransparency = 1
-		blur.Image = getcustomasset('aerov4/assets/new/blur.png')
+		blur.Image = getcustomasset('NYX/assets/new/blur.png')
 		blur.ScaleType = Enum.ScaleType.Slice
 		blur.SliceCenter = Rect.new(52, 31, 261, 502)
 		blur.Parent = parent
@@ -33000,7 +31037,7 @@ run(function()
 		return nil
 	end
 
-	AutoCyber = vape.Categories.Minigames:CreateModule({
+	AutoCyber = vape.Categories.Kits:CreateModule({
 		Name = 'AutoCyber',
 		Function = function(callback)
 			if callback then
@@ -33319,29 +31356,6 @@ run(function()
 		Suffix = 's',
 		Tooltip = 'how long it waits after switching before shooting (higher = more charge)'
 	})
-end)
-
-run(function()
-    local sillybed
-    sillybed = vape.Categories.Minigames:CreateModule({
-        Name = 'bed godmode',
-        Function = function(callback)
-            if callback then
-                task.spawn(function()
-                    for _, bed in collectionService:GetTagged('bed') do
-                        if bed:GetAttribute("TeamId") == lplr:GetAttribute('Team') then
-                            local normalpos = (bed:GetAttribute("BlockPosition")) * 3
-                            bedwars.Client:Get("RequestPlaceSpiritGardenerFlower"):CallServer(normalpos, "tearbloom_seed")
-                            local tung = fetchBedfromPos(bed:GetAttribute("BlockPosition"))
-                            bedwars.Client:Get("RequestPlaceSpiritGardenerFlower"):CallServer(tung * 3, "soulvine_seed")
-                        end
-                    end
-                end)
-                sillybed:Toggle()
-            end
-        end,
-        Tooltip = 'godmode with bed -- made by crobo'
-    })
 end)
 
 run(function()
@@ -34704,7 +32718,7 @@ run(function()
 				Session.Thread = task.spawn(function()
 					local ok, err = pcall(AutoKitFunctions[Kit], Session)
 					if not ok then
-						warn('[aerov4] autokit ' .. Kit .. ': ' .. tostring(err))
+						warn('[NYX] autokit ' .. Kit .. ': ' .. tostring(err))
 					end
 				end)
 			end

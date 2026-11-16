@@ -1,3 +1,3 @@
-for _, folder in ipairs({'NYX', 'aerov4', 'newvape'}) do
+for _, folder in ipairs({'NYX', 'newvape'}) do
 	pcall(delfolder, folder)
 end

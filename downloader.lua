@@ -11,8 +11,8 @@ local delfile = delfile or function(file) writefile(file, '') end
 local function downloadFile(path, func, forceRef)
 	if forceRef or not isfile(path) or readfile(path) == '' then
 		local suc, res = pcall(function()
-			local ref = forceRef or readfile('aerov4/profiles/commit.txt')
-			return game:HttpGet('https://raw.githubusercontent.com/nyxv4/nyx1/'..ref..'/'..select(1, path:gsub('aerov4/', '')), true)
+			local ref = forceRef or readfile('NYX/profiles/commit.txt')
+			return game:HttpGet('https://raw.githubusercontent.com/nyxv4/nyx1/'..ref..'/'..select(1, path:gsub('NYX/', '')), true)
 		end)
 		if not suc or type(res) ~= 'string' or res == '' or res == '404: Not Found' then error(res) end
 		if path:find('%.lua') then
@@ -35,22 +35,22 @@ local function wipeFolder(path)
 	end
 end
 
-for _, folder in {'aerov4', 'aerov4/games', 'aerov4/profiles', 'aerov4/assets', 'aerov4/libraries', 'aerov4/guis'} do
+for _, folder in {'NYX', 'NYX/games', 'NYX/profiles', 'NYX/assets', 'NYX/libraries', 'NYX/guis'} do
 	if not isfolder(folder) then makefolder(folder) end
 end
 
-if not isfile('aerov4/profiles/commit.txt') then
-	writefile('aerov4/profiles/commit.txt', 'main')
+if not isfile('NYX/profiles/commit.txt') then
+	writefile('NYX/profiles/commit.txt', 'main')
 end
 
 local function downloadPremadeProfiles(commit)
 	local httpService = game:GetService('HttpService')
-	if isfolder('aerov4/profiles/premade') then
-		for _, file in listfiles('aerov4/profiles/premade') do
+	if isfolder('NYX/profiles/premade') then
+		for _, file in listfiles('NYX/profiles/premade') do
 			pcall(function() if isfile(file) then delfile(file) end end)
 		end
 	else
-		makefolder('aerov4/profiles/premade')
+		makefolder('NYX/profiles/premade')
 	end
 	local success, response = pcall(function()
 		return game:HttpGet('https://api.github.com/repos/nyxv4/nyx1/contents/profiles/premade?ref=' .. commit)
@@ -62,7 +62,7 @@ local function downloadPremadeProfiles(commit)
 				if file.name and file.name:find('.txt') and file.name ~= 'commit.txt' then
 					local baseName = (file.name:match('^(.-)%.txt$') or file.name):gsub('%d+$', '')
 					local fileId = (game.GameId == 2619619496) and game.GameId or game.PlaceId
-					local filePath = 'aerov4/profiles/premade/' .. baseName .. tostring(fileId) .. '.txt'
+					local filePath = 'NYX/profiles/premade/' .. baseName .. tostring(fileId) .. '.txt'
 					local ds, dc = pcall(function() return game:HttpGet(file.download_url, true) end)
 					if ds and dc and type(dc) == 'string' and #dc > 0 and dc ~= '404: Not Found' then writefile(filePath, dc) end
 				end
@@ -74,8 +74,8 @@ end
 local commit
 local forceRef = pinnedCommit or 'main'
 if not shared.VapeDeveloper then
-	commit = isfile('aerov4/profiles/commit.txt') and readfile('aerov4/profiles/commit.txt') or ''
-	local latest = isfile('aerov4/profiles/latest.txt') and readfile('aerov4/profiles/latest.txt') or ''
+	commit = isfile('NYX/profiles/commit.txt') and readfile('NYX/profiles/commit.txt') or ''
+	local latest = isfile('NYX/profiles/latest.txt') and readfile('NYX/profiles/latest.txt') or ''
 	local ok, res = pcall(function()
 		return game:HttpGet('https://api.github.com/repos/nyxv4/nyx1/commits/main', true)
 	end)
@@ -83,31 +83,31 @@ if not shared.VapeDeveloper then
 	if h and #h == 40 then
 		commit = h
 		forceRef = pinnedCommit or h
-		pcall(writefile, 'aerov4/profiles/latest.txt', h)
+		pcall(writefile, 'NYX/profiles/latest.txt', h)
 	elseif #latest == 40 then
 		commit = latest
 	elseif #commit ~= 40 then
 		commit = 'main'
 	end
-	if commit ~= 'main' and (isfile('aerov4/profiles/commit.txt') and readfile('aerov4/profiles/commit.txt') or '') ~= commit then
-		wipeFolder('aerov4')
-		wipeFolder('aerov4/games')
-		wipeFolder('aerov4/guis')
-		pcall(function() if isfile('aerov4/guis/new.lua') then delfile('aerov4/guis/new.lua') end end)
-		wipeFolder('aerov4/libraries')
-		if isfolder('aerov4/profiles/premade') then
-			for _, file in listfiles('aerov4/profiles/premade') do
+	if commit ~= 'main' and (isfile('NYX/profiles/commit.txt') and readfile('NYX/profiles/commit.txt') or '') ~= commit then
+		wipeFolder('NYX')
+		wipeFolder('NYX/games')
+		wipeFolder('NYX/guis')
+		pcall(function() if isfile('NYX/guis/new.lua') then delfile('NYX/guis/new.lua') end end)
+		wipeFolder('NYX/libraries')
+		if isfolder('NYX/profiles/premade') then
+			for _, file in listfiles('NYX/profiles/premade') do
 				pcall(function() if isfile(file) then delfile(file) end end)
 			end
 		end
 	end
-	local oldCommit = isfile('aerov4/profiles/commit.txt') and readfile('aerov4/profiles/commit.txt') or ''
-	writefile('aerov4/profiles/commit.txt', commit)
+	local oldCommit = isfile('NYX/profiles/commit.txt') and readfile('NYX/profiles/commit.txt') or ''
+	writefile('NYX/profiles/commit.txt', commit)
 	local needPremade = (oldCommit ~= commit)
 	if not needPremade then
 		needPremade = true
-		if isfolder('aerov4/profiles/premade') then
-			for _ in listfiles('aerov4/profiles/premade') do
+		if isfolder('NYX/profiles/premade') then
+			for _ in listfiles('NYX/profiles/premade') do
 				needPremade = false
 				break
 			end
@@ -118,7 +118,7 @@ if not shared.VapeDeveloper then
 	end
 end
 
-return loadstring(downloadFile('aerov4/main.lua', nil, forceRef), 'main')({
+return loadstring(downloadFile('NYX/main.lua', nil, forceRef), 'main')({
 	Closet = _args.Closet,
 	Commit = forceRef,
 })

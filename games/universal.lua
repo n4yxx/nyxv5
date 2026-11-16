@@ -1,7 +1,7 @@
 local loadstring = function(...)
 	local res, err = loadstring(...)
 	if err and vape then
-		vape:CreateNotification('aerov4', 'Failed to load : '..err, 30, 'alert')
+		vape:CreateNotification('NYX', 'Failed to load : '..err, 30, 'alert')
 	end
 	return res
 end
@@ -16,7 +16,7 @@ local function downloadFile(path, func)
 		local suc, res = pcall(function()
 			local commit = isfile('NYX/profiles/commit.txt') and readfile('NYX/profiles/commit.txt')
 			if commit == nil or commit == '' then
-				commit = isfile('aerov4/profiles/commit.txt') and readfile('aerov4/profiles/commit.txt')
+				commit = isfile('NYX/profiles/commit.txt') and readfile('NYX/profiles/commit.txt')
 			end
 			if commit == nil or commit == '' then commit = 'main' end
 			return game:HttpGet('https://raw.githubusercontent.com/nyxv4/nyx1/'..commit..'/'..select(1, path:gsub('^NYX/', '')), true)
@@ -80,7 +80,7 @@ local function addBlur(parent)
 	blur.Size = UDim2.new(1, 89, 1, 52)
 	blur.Position = UDim2.fromOffset(-48, -31)
 	blur.BackgroundTransparency = 1
-	blur.Image = getcustomasset('aerov4/assets/new/blur.png')
+	blur.Image = getcustomasset('NYX/assets/new/blur.png')
 	blur.ScaleType = Enum.ScaleType.Slice
 	blur.SliceCenter = Rect.new(52, 31, 261, 502)
 	blur.Parent = parent
@@ -3300,7 +3300,7 @@ run(function()
 		arrow.BackgroundTransparency = 1
 		arrow.BorderSizePixel = 0
 		arrow.Visible = false
-		arrow.Image = getcustomasset('aerov4/assets/new/arrowmodule.png')
+		arrow.Image = getcustomasset('NYX/assets/new/arrowmodule.png')
 		arrow.ImageColor3 = entitylib.getEntityColor(ent) or Color3.fromHSV(Color.Hue, Color.Sat, Color.Value)
 		arrow.Parent = Folder
 		Reference[ent] = arrow
@@ -4274,228 +4274,6 @@ run(function()
 	})
 end)
 	
-run(function()
-	local GamingChair = {Enabled = false}
-	local Color
-	local wheelpositions = {
-		Vector3.new(-0.8, -0.6, -0.18),
-		Vector3.new(0.1, -0.6, -0.88),
-		Vector3.new(0, -0.6, 0.7)
-	}
-	local chairhighlight
-	local currenttween
-	local movingsound
-	local flyingsound
-	local chairanim
-	local chair
-	
-	GamingChair = vape.Categories.Render:CreateModule({
-		Name = 'GamingChair',
-		Function = function(callback)
-			if callback then
-				if vape.ThreadFix then
-					setthreadidentity(8)
-				end
-				chair = Instance.new('MeshPart')
-				chair.Color = Color3.fromRGB(21, 21, 21)
-				chair.Size = Vector3.new(2.16, 3.6, 2.3) / Vector3.new(12.37, 20.636, 13.071)
-				chair.CanCollide = false
-				chair.Massless = true
-				chair.MeshId = 'rbxassetid://12972961089'
-				chair.Material = Enum.Material.SmoothPlastic
-				chair.Parent = workspace
-				movingsound = Instance.new('Sound')
-				movingsound.Volume = 0.4
-				movingsound.Looped = true
-				movingsound.Parent = workspace
-				flyingsound = Instance.new('Sound')
-				flyingsound.Volume = 0.4
-				flyingsound.Looped = true
-				flyingsound.Parent = workspace
-				local chairweld = Instance.new('WeldConstraint')
-				chairweld.Part0 = chair
-				chairweld.Parent = chair
-				if entitylib.isAlive then
-					chair.CFrame = entitylib.character.RootPart.CFrame * CFrame.Angles(0, math.rad(-90), 0)
-					chairweld.Part1 = entitylib.character.RootPart
-				end
-				chairhighlight = Instance.new('Highlight')
-				chairhighlight.FillTransparency = 1
-				chairhighlight.OutlineColor = Color3.fromHSV(Color.Hue, Color.Sat, Color.Value)
-				chairhighlight.DepthMode = Enum.HighlightDepthMode.Occluded
-				chairhighlight.OutlineTransparency = 0.2
-				chairhighlight.Parent = chair
-				local chairarms = Instance.new('MeshPart')
-				chairarms.Color = chair.Color
-				chairarms.Size = Vector3.new(1.39, 1.345, 2.75) / Vector3.new(97.13, 136.216, 234.031)
-				chairarms.CFrame = chair.CFrame * CFrame.new(-0.169, -1.129, -0.013)
-				chairarms.MeshId = 'rbxassetid://12972673898'
-				chairarms.CanCollide = false
-				chairarms.Parent = chair
-				local chairarmsweld = Instance.new('WeldConstraint')
-				chairarmsweld.Part0 = chairarms
-				chairarmsweld.Part1 = chair
-				chairarmsweld.Parent = chair
-				local chairlegs = Instance.new('MeshPart')
-				chairlegs.Color = chair.Color
-				chairlegs.Name = 'Legs'
-				chairlegs.Size = Vector3.new(1.8, 1.2, 1.8) / Vector3.new(10.432, 8.105, 9.488)
-				chairlegs.CFrame = chair.CFrame * CFrame.new(0.047, -2.324, 0)
-				chairlegs.MeshId = 'rbxassetid://13003181606'
-				chairlegs.CanCollide = false
-				chairlegs.Parent = chair
-				local chairfan = Instance.new('MeshPart')
-				chairfan.Color = chair.Color
-				chairfan.Name = 'Fan'
-				chairfan.Size = Vector3.zero
-				chairfan.CFrame = chair.CFrame * CFrame.new(0, -1.873, 0)
-				chairfan.MeshId = 'rbxassetid://13004977292'
-				chairfan.CanCollide = false
-				chairfan.Parent = chair
-				local trails = {}
-				for _, v in wheelpositions do
-					local attachment = Instance.new('Attachment')
-					attachment.Position = v
-					attachment.Parent = chairlegs
-					local attachment2 = Instance.new('Attachment')
-					attachment2.Position = v + Vector3.new(0, 0, 0.18)
-					attachment2.Parent = chairlegs
-					local trail = Instance.new('Trail')
-					trail.Texture = 'http://www.roblox.com/asset/?id=13005168530'
-					trail.TextureMode = Enum.TextureMode.Static
-					trail.Transparency = NumberSequence.new(0.5)
-					trail.Color = ColorSequence.new(Color3.new(0.5, 0.5, 0.5))
-					trail.Attachment0 = attachment
-					trail.Attachment1 = attachment2
-					trail.Lifetime = 20
-					trail.MaxLength = 60
-					trail.MinLength = 0.1
-					trail.Parent = chairlegs
-					table.insert(trails, trail)
-				end
-				GamingChair:Clean(chair)
-				GamingChair:Clean(movingsound)
-				GamingChair:Clean(flyingsound)
-				chairanim = {Stop = function() end}
-				local oldmoving = false
-				local oldflying = false
-				repeat
-					if entitylib.isAlive and entitylib.character.Humanoid.Health > 0 then
-						if not chairanim.IsPlaying then
-							local temp2 = Instance.new('Animation')
-							temp2.AnimationId = entitylib.character.Humanoid.RigType == Enum.HumanoidRigType.R15 and 'http://www.roblox.com/asset/?id=2506281703' or 'http://www.roblox.com/asset/?id=178130996'
-							chairanim = entitylib.character.Humanoid:LoadAnimation(temp2)
-							chairanim.Priority = Enum.AnimationPriority.Movement
-							chairanim.Looped = true
-							chairanim:Play()
-						end
-						chair.CFrame = entitylib.character.RootPart.CFrame * CFrame.Angles(0, math.rad(-90), 0)
-						chairweld.Part1 = entitylib.character.RootPart
-						chairlegs.Velocity = Vector3.zero
-						chairlegs.CFrame = chair.CFrame * CFrame.new(0.047, -2.324, 0)
-						chairfan.Velocity = Vector3.zero
-						chairfan.CFrame = chair.CFrame * CFrame.new(0.047, -1.873, 0) * CFrame.Angles(0, math.rad(tick() * 180 % 360), math.rad(180))
-						local moving = entitylib.character.Humanoid:GetState() == Enum.HumanoidStateType.Running and entitylib.character.Humanoid.MoveDirection ~= Vector3.zero
-						local flying = vape.Modules.Fly and vape.Modules.Fly.Enabled or vape.Modules.LongJump and vape.Modules.LongJump.Enabled or vape.Modules.InfiniteFly and vape.Modules.InfiniteFly.Enabled
-						if movingsound.TimePosition > 1.9 then
-							movingsound.TimePosition = 0.2
-						end
-						movingsound.PlaybackSpeed = (entitylib.character.RootPart.Velocity * Vector3.new(1, 0, 1)).Magnitude / 16
-						for _, v in trails do
-							v.Enabled = not flying and moving
-							v.Color = ColorSequence.new(movingsound.PlaybackSpeed > 1.5 and Color3.new(1, 0.5, 0) or Color3.new())
-						end
-						if moving ~= oldmoving then
-							if movingsound.IsPlaying then
-								if not moving then
-									movingsound:Stop()
-								end
-							else
-								if not flying and moving then
-									movingsound:Play()
-								end
-							end
-							oldmoving = moving
-						end
-						if flying ~= oldflying then
-							if flying then
-								if movingsound.IsPlaying then
-									movingsound:Stop()
-								end
-								if not flyingsound.IsPlaying then
-									flyingsound:Play()
-								end
-								if currenttween then
-									currenttween:Cancel()
-								end
-								tween = tweenService:Create(chairlegs, TweenInfo.new(0.15), {
-									Size = Vector3.zero
-								})
-								tween.Completed:Connect(function(state)
-									if state == Enum.PlaybackState.Completed then
-										chairfan.Transparency = 0
-										chairlegs.Transparency = 1
-										tween = tweenService:Create(chairfan, TweenInfo.new(0.15), {
-											Size = Vector3.new(1.534, 0.328, 1.537) / Vector3.new(791.138, 168.824, 792.027)
-										})
-										tween:Play()
-									end
-								end)
-								tween:Play()
-							else
-								if flyingsound.IsPlaying then
-									flyingsound:Stop()
-								end
-								if not movingsound.IsPlaying and moving then
-									movingsound:Play()
-								end
-								if currenttween then currenttween:Cancel() end
-								tween = tweenService:Create(chairfan, TweenInfo.new(0.15), {
-									Size = Vector3.zero
-								})
-								tween.Completed:Connect(function(state)
-									if state == Enum.PlaybackState.Completed then
-										chairfan.Transparency = 1
-										chairlegs.Transparency = 0
-										tween = tweenService:Create(chairlegs, TweenInfo.new(0.15), {
-											Size = Vector3.new(1.8, 1.2, 1.8) / Vector3.new(10.432, 8.105, 9.488)
-										})
-										tween:Play()
-									end
-								end)
-								tween:Play()
-							end
-							oldflying = flying
-						end
-					else
-						chair.Anchored = true
-						chairlegs.Anchored = true
-						chairfan.Anchored = true
-						repeat task.wait() until entitylib.isAlive and entitylib.character.Humanoid.Health > 0
-						chair.Anchored = false
-						chairlegs.Anchored = false
-						chairfan.Anchored = false
-						chairanim:Stop()
-					end
-					task.wait()
-				until not GamingChair.Enabled
-			else
-				if chairanim then
-					chairanim:Stop()
-				end
-			end
-		end,
-		Tooltip = 'Sit in the best gaming chair known to mankind.'
-	})
-	Color = GamingChair:CreateColorSlider({
-		Name = 'Color',
-		Function = function(h, s, v)
-			if chairhighlight then
-				chairhighlight.OutlineColor = Color3.fromHSV(h, s, v)
-			end
-		end
-	})
-end)
 	
 run(function()
 	local Health
@@ -5103,7 +4881,7 @@ run(function()
 	
 	Radar = vape:CreateOverlay({
 		Name = 'Radar',
-		Icon = getcustomasset('aerov4/assets/new/radaricon.png'),
+		Icon = getcustomasset('NYX/assets/new/radaricon.png'),
 		Size = UDim2.fromOffset(14, 14),
 		Position = UDim2.fromOffset(12, 13),
 		Function = function(callback)
@@ -5323,7 +5101,7 @@ run(function()
 	
 	SessionInfo = vape:CreateOverlay({
 		Name = 'Session Info',
-		Icon = getcustomasset('aerov4/assets/new/textguiicon.png'),
+		Icon = getcustomasset('NYX/assets/new/textguiicon.png'),
 		Size = UDim2.fromOffset(16, 12),
 		Position = UDim2.fromOffset(12, 14),
 		Function = function(callback)
@@ -5392,8 +5170,8 @@ run(function()
 	Hide = SessionInfo:CreateTextList({
 		Name = 'Blacklist',
 		Tooltip = 'Name of entry to hide.',
-		Icon = getcustomasset('aerov4/assets/new/blockedicon.png'),
-		Tab = getcustomasset('aerov4/assets/new/blockedtab.png'),
+		Icon = getcustomasset('NYX/assets/new/blockedicon.png'),
+		Tab = getcustomasset('NYX/assets/new/blockedtab.png'),
 		TabSize = UDim2.fromOffset(21, 16),
 		Color = Color3.fromRGB(250, 50, 56)
 	})
@@ -5927,89 +5705,6 @@ run(function()
 	})
 end)
 	
-run(function()
-	local ChatSpammer
-	local Lines
-	local Mode
-	local Delay
-	local Hide
-	local oldchat
-	
-	ChatSpammer = vape.Categories.Utility:CreateModule({
-		Name = 'ChatSpammer',
-		Function = function(callback)
-			if callback then
-				if textChatService.ChatVersion == Enum.ChatVersion.TextChatService then
-					if Hide.Enabled and coreGui:FindFirstChild('ExperienceChat') then
-						ChatSpammer:Clean(coreGui.ExperienceChat:FindFirstChild('RCTScrollContentView', true).ChildAdded:Connect(function(msg)
-							if msg.Name:sub(1, 2) == '0-' and msg.ContentText == 'You must wait before sending another message.' then
-								msg.Visible = false
-							end
-						end))
-					end
-				elseif replicatedStorage:FindFirstChild('DefaultChatSystemChatEvents') then
-					if Hide.Enabled then
-						oldchat = hookfunction(getconnections(replicatedStorage.DefaultChatSystemChatEvents.OnNewSystemMessage.OnClientEvent)[1].Function, function(data, ...)
-							if data.Message:find('ChatFloodDetector') then return end
-							return oldchat(data, ...)
-						end)
-					end
-				else
-					notif('ChatSpammer', 'unsupported chat', 5, 'warning')
-					ChatSpammer:Toggle()
-					return
-				end
-				
-				local ind = 1
-				repeat
-					local message = (#Lines.ListEnabled > 0 and Lines.ListEnabled[math.random(1, #Lines.ListEnabled)] or 'aerov4 on top')
-					if Mode.Value == 'Order' and #Lines.ListEnabled > 0 then
-						message = Lines.ListEnabled[ind] or Lines.ListEnabled[1]
-						ind = (ind % #Lines.ListEnabled) + 1
-					end
-	
-					if textChatService.ChatVersion == Enum.ChatVersion.TextChatService then
-						textChatService.ChatInputBarConfiguration.TargetTextChannel:SendAsync(message)
-					else
-						replicatedStorage.DefaultChatSystemChatEvents.SayMessageRequest:FireServer(message, 'All')
-					end
-	
-					task.wait(Delay.Value)
-				until not ChatSpammer.Enabled
-			else
-				if oldchat then
-					hookfunction(getconnections(replicatedStorage.DefaultChatSystemChatEvents.OnNewSystemMessage.OnClientEvent)[1].Function, oldchat)
-				end
-			end
-		end,
-		Tooltip = 'Automatically types in chat'
-	})
-	Lines = ChatSpammer:CreateTextList({Name = 'Lines'})
-	Mode = ChatSpammer:CreateDropdown({
-		Name = 'Mode',
-		List = {'Random', 'Order'}
-	})
-	Delay = ChatSpammer:CreateSlider({
-		Name = 'Delay',
-		Min = 0.1,
-		Max = 10,
-		Default = 1,
-		Decimal = 10,
-		Suffix = function(val)
-			return val == 1 and 'second' or 'seconds'
-		end
-	})
-	Hide = ChatSpammer:CreateToggle({
-		Name = 'Hide Flood Message',
-		Default = true,
-		Function = function()
-			if ChatSpammer.Enabled then
-				ChatSpammer:Toggle()
-				ChatSpammer:Toggle()
-			end
-		end
-	})
-end)
 	
 run(function()
 	local Disabler
@@ -6423,88 +6118,7 @@ run(function()
 	})
 end)
 	
-run(function()
-	local rayCheck = RaycastParams.new()
-	rayCheck.RespectCanCollide = true
-	local module, old
 	
-	vape.Categories.World:CreateModule({
-		Name = 'SafeWalk',
-		Function = function(callback)
-			if callback then
-				if not module then
-					local suc = pcall(function() 
-						module = require(lplr.PlayerScripts.PlayerModule).controls 
-					end)
-					if not suc then module = {} end
-				end
-				
-				old = module.moveFunction
-				module.moveFunction = function(self, vec, face)
-					if entitylib.isAlive then
-						rayCheck.FilterDescendantsInstances = {lplr.Character, gameCamera}
-						local root = entitylib.character.RootPart
-						local movedir = root.Position + vec
-						local ray = workspace:Raycast(movedir, Vector3.new(0, -15, 0), rayCheck)
-						if not ray then
-							local check = workspace:Blockcast(root.CFrame, Vector3.new(3, 1, 3), Vector3.new(0, -(entitylib.character.HipHeight + 1), 0), rayCheck)
-							if check then
-								vec = (check.Instance:GetClosestPointOnSurface(movedir) - root.Position) * Vector3.new(1, 0, 1)
-							end
-						end
-					end
-	
-					return old(self, vec, face)
-				end
-			else
-				if module and old then
-					module.moveFunction = old
-				end
-			end
-		end,
-		Tooltip = 'Prevents you from walking off the edge of parts'
-	})
-end)
-	
-run(function()
-	local Xray
-	local List
-	local modified = {}
-	
-	local function modifyPart(v)
-		if v:IsA('BasePart') and not table.find(List.ListEnabled, v.Name) then
-			modified[v] = true
-			v.LocalTransparencyModifier = 0.5
-		end
-	end
-	
-	Xray = vape.Categories.World:CreateModule({
-		Name = 'Xray',
-		Function = function(callback)
-			if callback then
-				Xray:Clean(workspace.DescendantAdded:Connect(modifyPart))
-				for _, v in workspace:GetDescendants() do
-					modifyPart(v)
-				end
-			else
-				for i in modified do
-					i.LocalTransparencyModifier = 0
-				end
-				table.clear(modified)
-			end
-		end,
-		Tooltip = 'Renders whitelisted parts through walls.'
-	})
-	List = Xray:CreateTextList({
-		Name = 'Part',
-		Function = function()
-			if Xray.Enabled then
-				Xray:Toggle()
-				Xray:Toggle()
-			end
-		end
-	})
-end)
 	
 run(function()
 	local MurderMystery
@@ -7582,32 +7196,6 @@ run(function()
 end)
 	
 	
-run(function()
-    local PromptButtonHoldBegan = nil
-    local ProximityPromptService = cloneref(game:GetService('ProximityPromptService'))
-
-    local InstantPP = vape.Categories.Utility:CreateModule({
-        Name = 'InstantPP',
-        Function = function(callback)
-            if callback then
-                if fireproximityprompt then
-                    PromptButtonHoldBegan = ProximityPromptService.PromptButtonHoldBegan:Connect(function(prompt)
-                        fireproximityprompt(prompt)
-                    end)
-                else
-                    errorNotification('InstantPP', 'Your executer does not support this command (missing fireproximityprompt)', 5)
-                    InstantPP:Toggle()
-                end
-            else
-                if PromptButtonHoldBegan ~= nil then
-                    PromptButtonHoldBegan:Disconnect()
-                    PromptButtonHoldBegan = nil
-                end
-            end
-        end,
-        Tooltip = 'Instantly activates proximity prompts.'
-    })
-end)
 
 run(function()
 	local Shaders
@@ -8473,95 +8061,3 @@ run(function()
     })
 end)
 
-run(function()
-	local MotionBlur
-	local Intensity
-	local blur
-	local lastLook
-	local lastPos
-	local currentSize = 0
-
-	local function makeBlur()
-		if blur and blur.Parent then return blur end
-		local cam = workspace.CurrentCamera
-		if not cam then return nil end
-		blur = Instance.new('BlurEffect')
-		blur.Name = 'AeroMotionBlur'
-		blur.Size = 0
-		blur.Enabled = true
-		blur.Parent = cam
-		return blur
-	end
-
-	local function killBlur()
-		if blur then
-			pcall(function() blur:Destroy() end)
-			blur = nil
-		end
-		lastLook = nil
-		lastPos = nil
-		currentSize = 0
-	end
-
-	MotionBlur = vape.Categories.Render:CreateModule({
-		Name = 'MotionBlur',
-		Function = function(callback)
-			if callback then
-				makeBlur()
-
-				MotionBlur:Clean(workspace:GetPropertyChangedSignal('CurrentCamera'):Connect(function()
-					killBlur()
-					makeBlur()
-				end))
-
-				MotionBlur:Clean(runService.RenderStepped:Connect(function(dt)
-					if dt <= 0 or dt > 0.5 then return end
-					local cam = workspace.CurrentCamera
-					if not cam then return end
-					if not (blur and blur.Parent) then
-						if not makeBlur() then return end
-					end
-
-					local cf = cam.CFrame
-					local look = cf.LookVector
-					local pos = cf.Position
-					local target = 0
-
-					if lastLook then
-						local dot = math.clamp(lastLook:Dot(look), -1, 1)
-						local turn = math.deg(math.acos(dot)) / dt
-						target = target + turn * 0.02
-					end
-
-					if lastPos then
-						local travel = (pos - lastPos).Magnitude / dt
-						target = target + math.max(travel - 22, 0) * 0.07
-					end
-
-					lastLook = look
-					lastPos = pos
-
-					target = math.clamp(target * (Intensity.Value / 10), 0, 42)
-
-					local speed = target > currentSize and 20 or 8
-					currentSize = currentSize + (target - currentSize) * math.clamp(dt * speed, 0, 1)
-					if currentSize < 0.05 then currentSize = 0 end
-					blur.Size = currentSize
-				end))
-
-				MotionBlur:Clean(killBlur)
-			else
-				killBlur()
-			end
-		end,
-		Tooltip = 'blurs ur screen when u spin the cam or move fast'
-	})
-
-	Intensity = MotionBlur:CreateSlider({
-		Name = 'Intensity',
-		Min = 1,
-		Max = 25,
-		Default = 8,
-		Tooltip = 'how heavy the blur hits, crank it for that edit look'
-	})
-end)
