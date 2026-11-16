@@ -932,12 +932,15 @@ local function openMobileEditor()
 
 	local function refreshResults(query)
 		for _, child in searchResultsFrame:GetChildren() do
-			if child:IsA('TextButton') then child:Destroy() end
+			if child:IsA('TextButton') or child.Name == 'NoResults' then child:Destroy() end
 		end
 		local lower = (query or ''):lower()
+		local compact = lower:gsub('[%s_%-]', '')
 		local count = 0
 		for name, mod in mainapi.Modules do
-			if lower == '' or name:lower():find(lower, 1, true) then
+			local compactName = tostring(name):lower():gsub('[%s_%-]', '')
+			if compact == '' or compactName:find(compact, 1, true) then
+				pcall(function()
 				local alreadyAdded = false
 				for _, d in mobileButtons do
 					if d.module == mod then alreadyAdded = true break end
@@ -991,8 +994,19 @@ local function openMobileEditor()
 						rLabel.TextColor3 = uipallet.Text
 					end)
 				end
+				end)
 				count += 1
 			end
+		end
+		if count == 0 then
+			local emptyLabel = Instance.new('TextLabel')
+			emptyLabel.Name = 'NoResults'
+			emptyLabel.Size = UDim2.new(1, 0, 0, 36)
+			emptyLabel.BackgroundTransparency = 1
+			emptyLabel.Text = compact == '' and 'No features' or 'No matches'
+			emptyLabel.TextColor3 = color.Dark(uipallet.Text, 0.35)
+			emptyLabel.TextSize = 13
+			emptyLabel.Parent = searchResultsFrame
 		end
 		task.defer(function()
 			searchResultsFrame.CanvasSize = UDim2.fromOffset(0, resultsLayout.AbsoluteContentSize.Y)
@@ -1000,11 +1014,11 @@ local function openMobileEditor()
 	end
 
 	activeRefreshResults = refreshResults
-	refreshResults('')
-	rebuildRecents() 
 	searchBox:GetPropertyChangedSignal('Text'):Connect(function()
 		refreshResults(searchBox.Text)
 	end)
+	pcall(refreshResults, '')
+	rebuildRecents() 
 	resultsLayout:GetPropertyChangedSignal('AbsoluteContentSize'):Connect(function()
 		searchResultsFrame.CanvasSize = UDim2.fromOffset(0, resultsLayout.AbsoluteContentSize.Y)
 	end)
@@ -7294,13 +7308,20 @@ function mainapi:CreateSearch()
 	search.Position = UDim2.fromOffset(10, 0)
 	search.BackgroundTransparency = 1
 	search.Text = ''
-	search.PlaceholderText = ''
+	search.PlaceholderText = 'Search modules...'
+	search.PlaceholderColor3 = color.Dark(uipallet.Text, 0.35)
 	search.TextXAlignment = Enum.TextXAlignment.Left
 	search.TextColor3 = uipallet.Text
 	search.TextSize = 12
 	search.FontFace = uipallet.Font
 	search.ClearTextOnFocus = false
 	search.Parent = searchbkg
+	searchicon.Active = true
+	searchicon.InputBegan:Connect(function(input)
+		if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+			search:CaptureFocus()
+		end
+	end)
 	local children = Instance.new('ScrollingFrame')
 	children.Name = 'Children'
 	children.Size = UDim2.new(1, 0, 1, -37)
@@ -7330,29 +7351,38 @@ function mainapi:CreateSearch()
 	end)
 	search:GetPropertyChangedSignal('Text'):Connect(function()
 		for _, v in children:GetChildren() do
-			if v:IsA('TextButton') then
+			if v:IsA('TextButton') or v.Name == 'NoResults' then
 				v:Destroy()
 			end
 		end
-		if search.Text == '' then return end
+		if search.Text == '' then
+			searchbkg.Size = UDim2.fromOffset(220, 37)
+			children.CanvasSize = UDim2.new()
+			return
+		end
 
 		local lowerSearch = search.Text:lower()
+		local query = lowerSearch:gsub('[%s_%-]', '')
+		local function matchesKeyword(text)
+			if query == '' then return false end
+			return tostring(text):lower():gsub('[%s_%-]', ''):find(query, 1, true) ~= nil
+		end
 		local added = {}
 			
 		local orderCounter = 0
 		for i, v in self.Modules do
 			if not v then continue end
-			local matchType = nil
-			local matchKeyword = nil
+			pcall(function()
+			local matchType, matchKeyword
 
-			if i:lower():find(lowerSearch) then
-				matchType = "name"
+			if matchesKeyword(i) then
+				matchType = 'name'
 			end
 
 			if not matchType and self.ModuleAliases and self.ModuleAliases[i] then
 				for _, alias in ipairs(self.ModuleAliases[i]) do
-					if alias:lower():find(lowerSearch) then
-						matchType = "alias"
+					if matchesKeyword(alias) then
+						matchType = 'alias'
 						matchKeyword = alias
 						break
 					end
@@ -7361,18 +7391,18 @@ function mainapi:CreateSearch()
 
 			if not matchType and self.ModuleTags and self.ModuleTags[i] then
 				for _, tag in ipairs(self.ModuleTags[i]) do
-					if tag:lower():find(lowerSearch) then
-						matchType = "tag"
+					if matchesKeyword(tag) then
+						matchType = 'tag'
 						matchKeyword = tag
 						break
 					end
 				end
 			end
 
-			if not matchType then
-				for optName, opt in pairs(v.Options) do
-					if optName:lower():find(lowerSearch) then
-						matchType = "option"
+			if not matchType and v.Options then
+				for optName in v.Options do
+					if matchesKeyword(optName) then
+						matchType = 'option'
 						matchKeyword = optName
 						break
 					end
@@ -7491,8 +7521,8 @@ function mainapi:CreateSearch()
 					badgeText.FontFace = uipallet.FontSemiBold
 					badgeText.Parent = badge
 
-					local _, _, v = self.GUIColor.Hue, self.GUIColor.Sat, self.GUIColor.Value
-					if v > 0.7 then
+					local colorValue = self.GUIColor.Value
+					if colorValue > 0.7 then
 						badgeText.TextColor3 = Color3.new(0.1, 0.1, 0.1)
 					else
 						badgeText.TextColor3 = Color3.new(1, 1, 1)
@@ -7516,7 +7546,25 @@ function mainapi:CreateSearch()
 					until not button.Parent
 				end)
 			end
+			end)
 		end
+		if orderCounter == 0 then
+			local emptyLabel = Instance.new('TextLabel')
+			emptyLabel.Name = 'NoResults'
+			emptyLabel.Size = UDim2.fromOffset(220, 40)
+			emptyLabel.BackgroundTransparency = 1
+			emptyLabel.Text = 'No results'
+			emptyLabel.TextColor3 = color.Dark(uipallet.Text, 0.35)
+			emptyLabel.TextSize = 12
+			emptyLabel.FontFace = uipallet.Font
+			emptyLabel.Parent = children
+		end
+		task.defer(function()
+			if not searchbkg.Parent then return end
+			local contentY = windowlist.AbsoluteContentSize.Y / math.max(scale.Scale, 0.01)
+			children.CanvasSize = UDim2.fromOffset(0, contentY)
+			searchbkg.Size = UDim2.fromOffset(220, math.min(37 + contentY, 437))
+		end)
 	end)
 	windowlist:GetPropertyChangedSignal('AbsoluteContentSize'):Connect(function()
 		if self.ThreadFix then
