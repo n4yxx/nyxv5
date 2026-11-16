@@ -1,3 +1,4 @@
+--NYXBUILD:vape3
 local mainapi = {
 	Categories = {},
 	GUIColor = {
@@ -36,7 +37,7 @@ local httpService = cloneref(game:GetService('HttpService'))
 local fontsize = Instance.new('GetTextBoundsParams')
 fontsize.Width = math.huge
 local notifications
-local assetfunction = getcustomasset
+local assetfunction = getcustomasset or getsynasset
 local getcustomasset
 local clickgui
 local scaledgui
@@ -1442,11 +1443,14 @@ local function isValidAsset(path)
 	end
 	return true
 end
-local function downloadFile(path, func)
-	if not isValidAsset(path) then
+local function downloadFile(path, func, useLatest)
+	if useLatest or not isValidAsset(path) then
 		createDownloader(path)
 		local suc, res = pcall(function()
-			return game:HttpGet('https://raw.githubusercontent.com/nyxv4/nyx1/'..((isfile('aerov4/profiles/commit.txt') and readfile('aerov4/profiles/commit.txt')) or 'main')..'/'..select(1, path:gsub('aerov4/', '')), true)
+			local ref = useLatest and 'main' or ((isfile('aerov4/profiles/commit.txt') and readfile('aerov4/profiles/commit.txt')) or 'main')
+			local url = 'https://raw.githubusercontent.com/nyxv4/nyx1/'..ref..'/'..select(1, path:gsub('aerov4/', ''))
+			if useLatest then url = url..'?v='..tostring(os.time()) end
+			return game:HttpGet(url, true)
 		end)
 		if not suc or type(res) ~= 'string' or res == '' or res == '404: Not Found' then
 			error(res)
@@ -1497,7 +1501,7 @@ end
 
 local function getBrandAsset(path)
 	if not assetfunction then return '' end
-	local ok, res = pcall(downloadFile, path, assetfunction)
+	local ok, res = pcall(downloadFile, path, assetfunction, true)
 	if ok and type(res) == 'string' and res ~= '' and res ~= 'rbxassetid://0' then
 		return res
 	end
@@ -10537,7 +10541,7 @@ VapeLogo.BackgroundTransparency = 1
 VapeLogo.BorderSizePixel = 0
 VapeLogo.Visible = false
 VapeLogo.BackgroundColor3 = Color3.new()
-VapeLogo.Image = getcustomasset('aerov4/assets/new/textvape.png')
+VapeLogo.Image = getBrandAsset('aerov4/assets/new/textvape.png')
 VapeLogo.Parent = textgui.Children
 
 local lastside = textgui.Children.AbsolutePosition.X > (gui.AbsoluteSize.X / 2)
@@ -10559,7 +10563,7 @@ VapeLogoV4.Position = UDim2.new(1, 1, 0, 1)
 VapeLogoV4.BackgroundColor3 = Color3.new()
 VapeLogoV4.BackgroundTransparency = 1
 VapeLogoV4.BorderSizePixel = 0
-VapeLogoV4.Image = getcustomasset('aerov4/assets/new/textv4.png')
+VapeLogoV4.Image = getBrandAsset('aerov4/assets/new/textv4.png')
 VapeLogoV4.Parent = VapeLogo
 local VapeLogoShadow = VapeLogo:Clone()
 VapeLogoShadow.Position = UDim2.fromOffset(1, 1)

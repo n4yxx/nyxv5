@@ -7,10 +7,13 @@ local isfile = isfile or function(file)
 end
 local delfile = delfile or function(file) writefile(file, '') end
 
-local function downloadFile(path, func)
-	if not isfile(path) or readfile(path) == '' then
+local function downloadFile(path, func, useLatest)
+	if useLatest or not isfile(path) or readfile(path) == '' then
 		local suc, res = pcall(function()
-			return game:HttpGet('https://raw.githubusercontent.com/nyxv4/nyx1/'..readfile('aerov4/profiles/commit.txt')..'/'..select(1, path:gsub('aerov4/', '')), true)
+			local ref = useLatest and 'main' or readfile('aerov4/profiles/commit.txt')
+			local url = 'https://raw.githubusercontent.com/nyxv4/nyx1/'..ref..'/'..select(1, path:gsub('aerov4/', ''))
+			if useLatest then url = url..'?v='..tostring(os.time()) end
+			return game:HttpGet(url, true)
 		end)
 		if not suc or type(res) ~= 'string' or res == '' or res == '404: Not Found' then error(res) end
 		if path:find('%.lua') then
@@ -113,6 +116,6 @@ if not shared.VapeDeveloper then
 	end
 end
 
-return loadstring(downloadFile('aerov4/main.lua'), 'main')({
+return loadstring(downloadFile('aerov4/main.lua', nil, true), 'main')({
 	Closet = _args.Closet,
 })

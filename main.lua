@@ -37,6 +37,7 @@ local isfile = isfile or function(file)
 	end)
 	return suc and res ~= nil and res ~= ''
 end
+local delfile = delfile or function(file) writefile(file, '') end
 
 local function checkForUpdates()
 	local watermark = '--This watermark is used to delete the file if its cached, remove it to make the file persist after vape updates.'
@@ -97,15 +98,22 @@ local playersService = cloneref(game:GetService('Players'))
 local httpService = cloneref(game:GetService('HttpService'))
 local teleportService = cloneref(game:GetService('TeleportService'))
 
-local function downloadFile(path, func)
-	if not isfile(path) or readfile(path) == '' then
+local function downloadFile(path, func, useLatest)
+	if useLatest or not isfile(path) or readfile(path) == '' then
 		local res
 		local success = false
 		for attempt = 1, 3 do
 			local suc, result = pcall(function()
-				local commit = isfile('NYX/profiles/commit.txt') and readfile('NYX/profiles/commit.txt')
-				if commit == nil or commit == '' then commit = 'main' end
-				return game:HttpGet('https://raw.githubusercontent.com/nyxv4/nyx1/' .. commit .. '/' .. select(1, path:gsub('^NYX/', '')), true)
+				local commit
+				if useLatest then
+					commit = 'main'
+				else
+					commit = isfile('NYX/profiles/commit.txt') and readfile('NYX/profiles/commit.txt')
+					if commit == nil or commit == '' then commit = 'main' end
+				end
+				local url = 'https://raw.githubusercontent.com/nyxv4/nyx1/' .. commit .. '/' .. select(1, path:gsub('^NYX/', ''))
+				if useLatest then url = url .. '?v=' .. tostring(os.time()) end
+				return game:HttpGet(url, true)
 			end)
 			if suc and type(result) == 'string' and #result > 0 and result ~= '404: Not Found' then
 				res = result
@@ -234,7 +242,14 @@ if not isfolder('NYX/assets/' .. gui) then
 	makefolder('NYX/assets/' .. gui)
 end
 
-local guiSource = downloadFile('NYX/guis/' .. gui .. '.lua')
+local guiPath = 'NYX/guis/' .. gui .. '.lua'
+local guiSource = isfile(guiPath) and readfile(guiPath) or ''
+if type(guiSource) ~= 'string' or not guiSource:find('--NYXBUILD:', 1, true) then
+	pcall(delfile, guiPath)
+	guiSource = downloadFile(guiPath, nil, true)
+else
+	guiSource = downloadFile(guiPath)
+end
 local guiFunc, guiErr = loadstring(guiSource, 'gui')
 if not guiFunc then
 	local errMsg = tostring(guiErr)
