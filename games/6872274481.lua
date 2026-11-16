@@ -3332,6 +3332,8 @@ run(function()
 	local lastValidTarget = nil
 	local lastValidTime = 0
 	local GRACE_PERIOD = 0.15
+	local aimTarget = nil
+	local aimReactAt = 0
 	local rng = Random.new()
 	local shakeTime = 0
 	local shakeSeed = rng:NextNumber() * 1000
@@ -3405,6 +3407,7 @@ run(function()
 					pcall(function() runService:UnbindFromRenderStep(aimBindName) end)
 				end)
 				runService:BindToRenderStep(aimBindName, Enum.RenderPriority.Camera.Value + 1, (function(dt)
+					dt = math.min(dt, 1 / 30)
 
 					if not entitylib.isAlive or not entitylib.character or not entitylib.character.RootPart then
 						lockedTarget = nil
@@ -3588,10 +3591,26 @@ run(function()
 						aimPosition = aimPosition + camCF.RightVector * sx + camCF.UpVector * sy
 					end
 
-					local targetCFrame = CFrame.lookAt(gameCamera.CFrame.p, aimPosition)
+					if ent ~= aimTarget then
+						aimTarget = ent
+						aimReactAt = tick() + 0.04 + rng:NextNumber() * 0.05
+					end
+
+					local camCF = gameCamera.CFrame
+					local aimDelta = aimPosition - camCF.Position
+					if aimDelta.Magnitude < 0.01 then return end
+					local angle = math.acos(math.clamp(camCF.LookVector:Dot(aimDelta.Unit), -1, 1))
+					if angle < math.rad(0.35) then return end
+
+					local targetCFrame = CFrame.lookAt(camCF.Position, aimPosition)
 					local smoothVal = (SmoothnessToggle and SmoothnessToggle.Enabled and Smoothness) and Smoothness.Value or nil
 					local alpha = getAimAlpha(AimSpeed.Value, smoothVal, dt)
-					gameCamera.CFrame = gameCamera.CFrame:Lerp(targetCFrame, alpha)
+					local ease = 0.72 + 0.28 * math.min(angle / math.rad(22), 1)
+					if tick() < aimReactAt then
+						ease = ease * 0.25
+					end
+					local step = math.min(angle * alpha * ease, math.rad(600) * dt)
+					gameCamera.CFrame = camCF:Lerp(targetCFrame, step / angle)
 				end))
 			else
 				lockedTarget = nil
@@ -7386,7 +7405,7 @@ run(function()
 				task.wait(0)
 				if token ~= fhRestoreToken then return end
 				if not sw.tool.Parent then return end
-				if not Killaura or not Killaura.Enabled then return end
+				if not ((Killaura and Killaura.Enabled) or (vape.Modules and vape.Modules['GrandKillaura'] and vape.Modules['GrandKillaura'].Enabled)) then return end
 				if check.Value ~= sw.tool or (store.hand and store.hand.tool ~= sw.tool) then
 					check.Value = sw.tool
 					pcall(function() bedwars.Client:Get(remotes.EquipItem):CallServerAsync({hand = sw.tool}) end)
@@ -7923,16 +7942,25 @@ run(function()
 
 	local function doFastHits()
 		if not FastHits or not FastHits.Enabled then return end
-		if not Killaura or not Killaura.Enabled then return end
+		local kaOn = Killaura and Killaura.Enabled
+		local grandOn = vape.Modules and vape.Modules['GrandKillaura'] and vape.Modules['GrandKillaura'].Enabled
+		if not kaOn and not grandOn then return end
 		if not entitylib.isAlive then return end
 
 		local selfRoot = entitylib.character and entitylib.character.RootPart
 		if not selfRoot then return end
 
-		local ent = store.KillauraTarget
+		local ent
+		if kaOn then
+			ent = store.KillauraTarget
+		else
+			ent = store.GrandKillauraTarget
+		end
 		if not ent or not ent.RootPart then return end
-		if not fhInAngle(ent) then return end
-		if (ent.RootPart.Position - selfRoot.Position).Magnitude > SwingRange.Value then return end
+		if kaOn then
+			if not fhInAngle(ent) then return end
+			if (ent.RootPart.Position - selfRoot.Position).Magnitude > SwingRange.Value then return end
+		end
 
 		if not FastHitPending then
 			if LegitSwitch and LegitSwitch.Enabled then
@@ -7953,7 +7981,7 @@ run(function()
 		FastHitPending = false
 
 		autoShootLoop = task.spawn(function()
-			while Killaura and Killaura.Enabled and FastHits and FastHits.Enabled do
+			while FastHits and FastHits.Enabled and ((Killaura and Killaura.Enabled) or (vape.Modules and vape.Modules['GrandKillaura'] and vape.Modules['GrandKillaura'].Enabled)) do
 				pcall(doFastHits)
 				task.wait(0.05)
 			end
@@ -8186,6 +8214,13 @@ run(function()
 		Name = 'Killaura',
 		Function = function(callback)
 			if callback then
+				if not vape.Loading then
+					local grandMod = vape.Modules and vape.Modules['GrandKillaura']
+					if grandMod and grandMod.Enabled then grandMod:SetEnabled(false) end
+					store._auraModeSync = true
+					if store.KillauraModeDropdown then store.KillauraModeDropdown:SetValue('Killaura') end
+					store._auraModeSync = false
+				end
 				lastAttackTime = 0
 				lastTargetTime = 0
 				lastAnimTime = 0
@@ -8671,7 +8706,7 @@ run(function()
 			if Fireballs then Fireballs.Object.Visible = call end
 			if FireballCooldown then FireballCooldown.Object.Visible = call and (Fireballs and Fireballs.Enabled) end
 			if call then
-				if Killaura and Killaura.Enabled then
+				if (Killaura and Killaura.Enabled) or (vape.Modules and vape.Modules['GrandKillaura'] and vape.Modules['GrandKillaura'].Enabled) then
 					startAutoShootLoop()
 				end
 			else
@@ -8765,7 +8800,6 @@ run(function()
 	-- GrandKillaura: ported from upstream, fully independent state from Killaura
 	local GrandKillaura
 	local GrandTargets
-	local GrandSort
 	local GrandSwingRange
 	local GrandAttackRange
 	local GrandChargeTime
@@ -8831,6 +8865,19 @@ run(function()
 		if not entitylib.isAlive then return false end
 		if not entitylib.character or not entitylib.character.RootPart then return false end
 		if not bedwars.SwordController or bedwars.SwordController.disableSwingState then return false end
+
+		local casting = lplr:GetAttribute('IsCasting')
+		if casting ~= nil and casting ~= false and casting ~= 0 and casting ~= '' then
+			if casting == true then return false end
+			if type(casting) == 'number' and casting > workspace:GetServerTimeNow() then return false end
+		end
+
+		local stunned = lplr.Character and lplr.Character:GetAttribute('StunnedUntilTime')
+		if stunned and stunned > workspace:GetServerTimeNow() then return false end
+
+		if tick() - (store.silasAbilityTime or 0) < 2.2 then return false end
+		if tick() - (store.terraStompTime or 0) < 0.7 then return false end
+		if tick() - (store.terraKickTime or 0) < 0.5 then return false end
 
 		if GrandMouse and GrandMouse.Enabled and not inputService:IsMouseButtonPressed(Enum.UserInputType.MouseButton1) then
 			return false
@@ -8966,7 +9013,7 @@ run(function()
 			Players = GrandTargets.Players.Enabled,
 			NPCs = GrandTargets.NPCs.Enabled,
 			Limit = 5,
-			Sort = sortmethods[GrandSort.Value]
+			Sort = sortmethods.Distance
 		})
 		for _, ent in list do
 			if usable(ent) then
@@ -9067,11 +9114,22 @@ run(function()
 		Tooltip = 'Attack players around you\nwithout aiming at them.',
 		Function = function(callback)
 			if callback then
+				if not vape.Loading then
+					local kaMod = vape.Modules and vape.Modules['Killaura']
+					if kaMod and kaMod.Enabled then kaMod:SetEnabled(false) end
+					store._auraModeSync = true
+					if store.KillauraModeDropdown then store.KillauraModeDropdown:SetValue('OldKillaura') end
+					store._auraModeSync = false
+				end
 				GrandAttacking = false
 				GrandLastAnimTime = 0
 				GrandFire.ScanCache, GrandFire.ScanTime = nil, 0
 				resetSwordCooldown()
 				GrandFire.start()
+
+				if FastHits and FastHits.Enabled then
+					startAutoShootLoop()
+				end
 
 				if inputService.TouchEnabled then
 					pcall(function()
@@ -9153,7 +9211,7 @@ run(function()
 
 					local attacked = {}
 					if sword then
-						if GrandFire.LastSword ~= sword.tool.Name then
+						if GrandFire.LastSword ~= sword.tool.Name and not fhBusy then
 							GrandFire.LastSword = sword.tool.Name
 							resetSwordCooldown()
 						end
@@ -9167,7 +9225,7 @@ run(function()
 								Players = GrandTargets.Players.Enabled,
 								NPCs = GrandTargets.NPCs.Enabled,
 								Limit = GrandMaxTargets.Value,
-								Sort = sortmethods[GrandSort.Value]
+								Sort = sortmethods.Distance
 							})
 
 							if avoidTarget and #plrs > 1 then
@@ -9267,12 +9325,15 @@ run(function()
 						entitylib.character.RootPart.CFrame = CFrame.lookAt(entitylib.character.RootPart.Position, Vector3.new(vec.X, entitylib.character.RootPart.Position.Y + 0.001, vec.Z))
 					end
 
-					task.wait(math.min(1 / math.max(GrandUpdateRate.Value, 1), 1 / 240))
+					task.wait(1 / math.max(GrandUpdateRate.Value, 1))
 				until not GrandKillaura.Enabled
 			else
 				GrandFire.stop()
 				GrandFire.ScanCache, GrandFire.ScanTime = nil, 0
 				store.GrandKillauraTarget = nil
+				if not (Killaura and Killaura.Enabled) then
+					stopAutoShootLoop()
+				end
 				for _, box in GrandBoxes do box.Adornee = nil end
 				for _, part in GrandParticles do part.Parent = nil end
 				if inputService.TouchEnabled then
@@ -9337,10 +9398,6 @@ run(function()
 		Min = 1,
 		Max = 5,
 		Default = 5
-	})
-	GrandSort = GrandKillaura:CreateDropdown({
-		Name = 'Target Mode',
-		List = getSortList({'Distance'})
 	})
 	GrandMouse = GrandKillaura:CreateToggle({Name = 'Require mouse down'})
 	GrandSwing = GrandKillaura:CreateToggle({Name = 'No Swing'})
@@ -9533,6 +9590,28 @@ run(function()
 		Name = 'Attack Check',
 		Tooltip = 'checks if attacking ina legit way',
 		Default = false
+	})
+
+	store.KillauraModeDropdown = Killaura:CreateDropdown({
+		Name = 'Killaura Mode',
+		List = {'Killaura', 'OldKillaura'},
+		Tooltip = 'switch between the current Killaura and the old GrandKillaura',
+		Function = function(val)
+			if store._auraModeSync then return end
+			task.defer(function()
+				if store._auraModeSync then return end
+				local kaMod = vape.Modules and vape.Modules['Killaura']
+				local grandMod = vape.Modules and vape.Modules['GrandKillaura']
+				if not kaMod or not grandMod then return end
+				if val == 'OldKillaura' then
+					if kaMod.Enabled then kaMod:SetEnabled(false) end
+					if not grandMod.Enabled then grandMod:SetEnabled(true) end
+				else
+					if grandMod.Enabled then grandMod:SetEnabled(false) end
+					if not kaMod.Enabled then kaMod:SetEnabled(true) end
+				end
+			end)
+		end
 	})
 end)
 						
