@@ -8788,11 +8788,12 @@ run(function()
 	local GrandAttacking = false
 	local GrandLastSrv = 0
 	local GrandLastAnimTime = 0
-	local GrandFireLoop
-	local GrandFirePeriod = 0.29583333333333334
-	local GrandGraceTarget, GrandGraceUntil = nil, 0
-	local GrandFastAcqTime, GrandFastAcqRes = 0, nil
-	local GrandScanCache, GrandScanTime = nil, 0
+	local GrandFire = {
+		Period = 0.29583333333333334,
+		GraceUntil = 0,
+		AcqTime = 0,
+		ScanTime = 0
+	}
 	local GrandAnimTween
 	local GrandArmC0
 	local GrandAnimActive = false
@@ -8879,7 +8880,7 @@ run(function()
 		return ok
 	end
 
-	local function grandAliveTarget(v)
+	function GrandFire.aliveTarget(v)
 		if not v or not v.RootPart then return false end
 		local char = v.Character
 		if not char or not char.Parent then return false end
@@ -8887,13 +8888,13 @@ run(function()
 		return true
 	end
 
-	local function grandInReach(v)
+	function GrandFire.inReach(v)
 		local root = entitylib.character and entitylib.character.RootPart
 		if not root or not v or not v.RootPart then return false end
 		return (v.RootPart.Position - root.Position).Magnitude <= GrandAttackRange.Value
 	end
 
-	local function grandWithinAngle(v)
+	function GrandFire.withinAngle(v)
 		if GrandAngle.Value >= 360 then return true end
 		local root = entitylib.character and entitylib.character.RootPart
 		if not root or not v or not v.RootPart then return false end
@@ -8904,30 +8905,30 @@ run(function()
 		return math.acos(math.clamp(facing:Dot(flat.Unit), -1, 1)) <= math.rad(GrandAngle.Value) / 2
 	end
 
-	local function grandResolveTarget()
+	function GrandFire.resolveTarget()
 		local avoid = (Killaura and Killaura.Enabled) and store.KillauraTarget or nil
 		local function usable(v)
-			return grandAliveTarget(v) and v ~= avoid and grandWithinAngle(v) and grandInReach(v)
+			return GrandFire.aliveTarget(v) and v ~= avoid and GrandFire.withinAngle(v) and GrandFire.inReach(v)
 		end
 
 		local v = store.GrandKillauraTarget
 		if usable(v) then
-			GrandGraceTarget = v
-			GrandGraceUntil = tick() + 0.4
+			GrandFire.GraceTarget = v
+			GrandFire.GraceUntil = tick() + 0.4
 			return v
 		end
 
-		local g = GrandGraceTarget
-		if g and tick() < GrandGraceUntil and grandAliveTarget(g) and grandInReach(g) and g ~= avoid then
+		local g = GrandFire.GraceTarget
+		if g and tick() < GrandFire.GraceUntil and GrandFire.aliveTarget(g) and GrandFire.inReach(g) and g ~= avoid then
 			return g
 		end
 
 		local now = tick()
-		if (now - GrandFastAcqTime) < 0.03 and GrandFastAcqRes then
-			return usable(GrandFastAcqRes) and GrandFastAcqRes or nil
+		if (now - GrandFire.AcqTime) < 0.03 and GrandFire.AcqRes then
+			return usable(GrandFire.AcqRes) and GrandFire.AcqRes or nil
 		end
-		GrandFastAcqTime = now
-		GrandFastAcqRes = nil
+		GrandFire.AcqTime = now
+		GrandFire.AcqRes = nil
 
 		local list = entitylib.AllPosition({
 			Range = GrandAttackRange.Value,
@@ -8940,18 +8941,18 @@ run(function()
 		})
 		for _, ent in list do
 			if usable(ent) then
-				GrandFastAcqRes = ent
+				GrandFire.AcqRes = ent
 				break
 			end
 		end
-		return GrandFastAcqRes
+		return GrandFire.AcqRes
 	end
 
-	local function grandAttemptFire()
+	function GrandFire.attempt()
 		if fhBusy and (workspace:GetServerTimeNow() - (store._fhBusySince or 0)) < 0.10 then return false end
 		if lastProjectileTime > 0 and (workspace:GetServerTimeNow() - lastProjectileTime) < 0.075 then return false end
 
-		local v = grandResolveTarget()
+		local v = GrandFire.resolveTarget()
 		if not v then return false end
 
 		local sword, meta = grandGetAttackData()
@@ -8974,7 +8975,7 @@ run(function()
 		end
 
 		local srvNow = workspace:GetServerTimeNow()
-		GrandLastSrv = GrandLastSrv + GrandFirePeriod
+		GrandLastSrv = GrandLastSrv + GrandFire.Period
 		if GrandLastSrv < srvNow then
 			GrandLastSrv = srvNow
 		end
@@ -8986,41 +8987,41 @@ run(function()
 		return true
 	end
 
-	local function startGrandFireLoop()
-		if GrandFireLoop then return end
+	function GrandFire.start()
+		if GrandFire.Loop then return end
 
-		GrandFirePeriod = GRAND_HIT_PERIOD
-		GrandLastSrv = workspace:GetServerTimeNow() - GrandFirePeriod
-		GrandGraceTarget, GrandGraceUntil = nil, 0
-		GrandFastAcqTime, GrandFastAcqRes = 0, nil
+		GrandFire.Period = GRAND_HIT_PERIOD
+		GrandLastSrv = workspace:GetServerTimeNow() - GrandFire.Period
+		GrandFire.GraceTarget, GrandFire.GraceUntil = nil, 0
+		GrandFire.AcqTime, GrandFire.AcqRes = 0, nil
 
-		GrandFireLoop = task.spawn(function()
+		GrandFire.Loop = task.spawn(function()
 			while GrandKillaura and GrandKillaura.Enabled do
 				runService.Heartbeat:Wait()
 
 				local sword, meta = grandGetAttackData()
 				if sword and meta then
-					GrandFirePeriod = getAttackDelay(meta)
+					GrandFire.Period = getAttackDelay(meta)
 				else
-					GrandFirePeriod = GRAND_HIT_PERIOD
+					GrandFire.Period = GRAND_HIT_PERIOD
 				end
 
 				local heartbeatDt = 1 / 60
-				local target = GrandFirePeriod - math.min(heartbeatDt * 0.5, GrandFirePeriod * 0.06)
+				local target = GrandFire.Period - math.min(heartbeatDt * 0.5, GrandFire.Period * 0.06)
 				if (workspace:GetServerTimeNow() - GrandLastSrv) >= target then
-					pcall(grandAttemptFire)
+					pcall(GrandFire.attempt)
 				end
 			end
 		end)
 	end
 
-	local function stopGrandFireLoop()
-		if GrandFireLoop then
-			pcall(task.cancel, GrandFireLoop)
-			GrandFireLoop = nil
+	function GrandFire.stop()
+		if GrandFire.Loop then
+			pcall(task.cancel, GrandFire.Loop)
+			GrandFire.Loop = nil
 		end
-		GrandGraceTarget, GrandGraceUntil = nil, 0
-		GrandFastAcqTime, GrandFastAcqRes = 0, nil
+		GrandFire.GraceTarget, GrandFire.GraceUntil = nil, 0
+		GrandFire.AcqTime, GrandFire.AcqRes = 0, nil
 		GrandLastSrv = 0
 	end
 
@@ -9031,8 +9032,8 @@ run(function()
 			if callback then
 				GrandAttacking = false
 				GrandLastAnimTime = 0
-				GrandScanCache, GrandScanTime = nil, 0
-				startGrandFireLoop()
+				GrandFire.ScanCache, GrandFire.ScanTime = nil, 0
+				GrandFire.start()
 
 				if inputService.TouchEnabled then
 					pcall(function()
@@ -9115,7 +9116,7 @@ run(function()
 					local attacked = {}
 					if sword then
 						local now = tick()
-						if not GrandScanCache or (now - GrandScanTime) >= 0.05 then
+						if not GrandFire.ScanCache or (now - GrandFire.ScanTime) >= 0.05 then
 							local avoidTarget = (Killaura and Killaura.Enabled) and store.KillauraTarget or nil
 							local plrs = entitylib.AllPosition({
 								Range = GrandSwingRange.Value,
@@ -9139,11 +9140,11 @@ run(function()
 								end
 							end
 
-							GrandScanCache = plrs
-							GrandScanTime = now
+							GrandFire.ScanCache = plrs
+							GrandFire.ScanTime = now
 						end
 
-						local plrs = GrandScanCache
+						local plrs = GrandFire.ScanCache
 						if #plrs > 0 then
 							local selfpos = entitylib.character.RootPart.Position
 							local flatLV = entitylib.character.RootPart.CFrame.LookVector * Vector3.new(1, 0, 1)
@@ -9227,8 +9228,8 @@ run(function()
 					task.wait(math.min(1 / math.max(GrandUpdateRate.Value, 1), 1 / 240))
 				until not GrandKillaura.Enabled
 			else
-				stopGrandFireLoop()
-				GrandScanCache, GrandScanTime = nil, 0
+				GrandFire.stop()
+				GrandFire.ScanCache, GrandFire.ScanTime = nil, 0
 				store.GrandKillauraTarget = nil
 				for _, box in GrandBoxes do box.Adornee = nil end
 				for _, part in GrandParticles do part.Parent = nil end
