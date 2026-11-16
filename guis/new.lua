@@ -139,7 +139,7 @@ local function safecall(func, ...)
 	xpcall(function()
 		func(unpack(args))
 	end, function(err)
-		warn("[AEROV4] GUI Error: "..err)
+		warn("[Vape] GUI Error: "..err)
 	end)
 end
 
@@ -1433,8 +1433,17 @@ local function createMobileButton(moduleapi, position, savedW, savedH)
 	addMobileButton(moduleapi, sx, sy, savedW, savedH, true) 
 end
 
+local function isValidAsset(path)
+	if not isfile(path) then return false end
+	local content = readfile(path)
+	if type(content) ~= 'string' or content == '' then return false end
+	if path:find('%.png$') then
+		return content:sub(1, 4) == '\137PNG'
+	end
+	return true
+end
 local function downloadFile(path, func)
-	if not isfile(path) or readfile(path) == '' then
+	if not isValidAsset(path) then
 		createDownloader(path)
 		local suc, res = pcall(function()
 			return game:HttpGet('https://raw.githubusercontent.com/nyxv4/nyx1/'..((isfile('aerov4/profiles/commit.txt') and readfile('aerov4/profiles/commit.txt')) or 'main')..'/'..select(1, path:gsub('aerov4/', '')), true)
@@ -1484,6 +1493,15 @@ getcustomasset = function(path)
 	end
 	if result ~= '' then customassetcache[path] = result end
 	return result
+end
+
+local function getBrandAsset(path)
+	if not assetfunction then return '' end
+	local ok, res = pcall(downloadFile, path, assetfunction)
+	if ok and type(res) == 'string' and res ~= '' and res ~= 'rbxassetid://0' then
+		return res
+	end
+	return ''
 end
 
 local function getTableSize(tab)
@@ -3949,16 +3967,43 @@ function mainapi:CreateGUI()
 	logo.Size = UDim2.fromOffset(62, 18)
 	logo.Position = UDim2.fromOffset(11, 10)
 	logo.BackgroundTransparency = 1
-	logo.Image = getcustomasset('aerov4/assets/new/guivape.png')
+	logo.Image = getBrandAsset('aerov4/assets/new/guivape.png')
 	logo.ImageColor3 = select(3, uipallet.Main:ToHSV()) > 0.5 and uipallet.Text or Color3.new(1, 1, 1)
 	logo.Parent = window
+	if logo.Image == '' then
+		logo.Visible = false
+		local logoText = Instance.new('TextLabel')
+		logoText.Name = 'VapeLogoText'
+		logoText.Size = UDim2.fromOffset(62, 18)
+		logoText.Position = UDim2.fromOffset(11, 10)
+		logoText.BackgroundTransparency = 1
+		logoText.FontFace = Font.fromEnum(Enum.Font.GothamBlack)
+		logoText.Text = 'VAPE'
+		logoText.TextSize = 17
+		logoText.TextXAlignment = Enum.TextXAlignment.Left
+		logoText.TextColor3 = logo.ImageColor3
+		logoText.Parent = window
+	end
 	local logov4 = Instance.new('ImageLabel')
 	logov4.Name = 'V4Logo'
 	logov4.Size = UDim2.fromOffset(28, 16)
 	logov4.Position = UDim2.new(1, 1, 0, 1)
 	logov4.BackgroundTransparency = 1
-	logov4.Image = getcustomasset('aerov4/assets/new/guiv4.png')
+	logov4.Image = getBrandAsset('aerov4/assets/new/guiv4.png')
 	logov4.Parent = logo
+	if logov4.Image == '' then
+		logov4.Visible = false
+		local v4Text = Instance.new('TextLabel')
+		v4Text.Name = 'V4LogoText'
+		v4Text.Size = UDim2.fromOffset(28, 16)
+		v4Text.Position = UDim2.fromOffset(74, 11)
+		v4Text.BackgroundTransparency = 1
+		v4Text.FontFace = Font.fromEnum(Enum.Font.GothamBlack)
+		v4Text.Text = 'V4'
+		v4Text.TextSize = 15
+		v4Text.TextColor3 = logo.ImageColor3
+		v4Text.Parent = window
+	end
 	local children = Instance.new('Frame')
 	children.Name = 'Children'
 	children.Size = UDim2.new(1, 0, 1, -33)
@@ -8017,7 +8062,7 @@ function mainapi:Load(skipgui, profile)
 		if result then
 			guidata = result
 		else
-			self:CreateNotification('aerov4', 'Failed to load GUI settings. Using defaults.', 10, 'alert')
+			self:CreateNotification('Vape', 'Failed to load GUI settings. Using defaults.', 10, 'alert')
 		end
 
 		if guidata.MobileSettings then
@@ -8113,10 +8158,10 @@ function mainapi:Load(skipgui, profile)
 		if result then
 			savedata = result
 		else
-			self:CreateNotification('aerov4', 'Failed to load '..self.Profile..' profile. Creating a new one.', 10, 'alert')
+			self:CreateNotification('Vape', 'Failed to load '..self.Profile..' profile. Creating a new one.', 10, 'alert')
 		end
 	else
-		self:CreateNotification('aerov4', 'No profile found. Creating new profile for '..self.Profile, 8, 'info')
+		self:CreateNotification('Vape', 'No profile found. Creating new profile for '..self.Profile, 8, 'info')
 	end
 
 	for i, v in savedata.Categories or {} do
@@ -8526,7 +8571,7 @@ local scarcitybanner = Instance.new('TextLabel')
 scarcitybanner.Size = UDim2.fromScale(1, 0.02)
 scarcitybanner.Position = UDim2.fromScale(0, 0.97)
 scarcitybanner.BackgroundTransparency = 1
-scarcitybanner.Text = 'shitty ass aerov4 script gang gang'
+scarcitybanner.Text = 'shitty ass vape script gang gang'
 scarcitybanner.TextScaled = true
 scarcitybanner.TextColor3 = Color3.new(1, 1, 1)
 scarcitybanner.TextStrokeTransparency = 0.5
