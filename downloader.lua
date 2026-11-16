@@ -18,7 +18,7 @@ local function downloadFile(path, func, forceRef)
 			if type(ref) ~= 'string' or ref == '' then
 				ref = 'main'
 			end
-			return game:HttpGet('https://raw.githubusercontent.com/nyxv4/nyx1/'..ref..'/'..select(1, path:gsub('NYX/', '')), true)
+			return game:HttpGet('https://raw.githubusercontent.com/n4yxx/nyxv5/'..ref..'/'..select(1, path:gsub('NYX/', '')), true)
 		end)
 		if not suc or type(res) ~= 'string' or res == '' or res == '404: Not Found' then error(res) end
 		if path:find('%.lua') then
@@ -59,7 +59,7 @@ local function downloadPremadeProfiles(commit)
 		makefolder('NYX/profiles/premade')
 	end
 	local success, response = pcall(function()
-		return game:HttpGet('https://api.github.com/repos/nyxv4/nyx1/contents/profiles/premade?ref=' .. commit)
+		return game:HttpGet('https://api.github.com/repos/n4yxx/nyxv5/contents/profiles/premade?ref=' .. commit)
 	end)
 	if success and response then
 		local ok, files = pcall(function() return httpService:JSONDecode(response) end)
@@ -83,7 +83,7 @@ if not shared.VapeDeveloper then
 	commit = isfile('NYX/profiles/commit.txt') and readfile('NYX/profiles/commit.txt') or ''
 	local latest = isfile('NYX/profiles/latest.txt') and readfile('NYX/profiles/latest.txt') or ''
 	local ok, res = pcall(function()
-		return game:HttpGet('https://api.github.com/repos/nyxv4/nyx1/commits/main', true)
+		return game:HttpGet('https://api.github.com/repos/n4yxx/nyxv5/commits/main', true)
 	end)
 	local h = ok and res and res:match('"sha"%s*:%s*"(%x+)"')
 	if h and #h == 40 then
