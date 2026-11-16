@@ -9500,7 +9500,7 @@ run(function()
 		Default = 5
 	})
 	GrandHitregMode = GrandKillaura:CreateDropdown({
-		Name = 'Hitreg Mode',
+		Name = 'Grand Hitreg Mode',
 		List = {'Stealth Mode', 'Dynamic'},
 		Default = 'Stealth Mode',
 		Tooltip = 'GrandKillaura hit spacing mode',
