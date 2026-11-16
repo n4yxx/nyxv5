@@ -5,7 +5,7 @@ if type(setthreadidentity) == 'function' then
 end
 if shared.vape then pcall(function() shared.vape:Uninject() end) end
 
-local LOADER_URL = "https://raw.githubusercontent.com/nyxv4/nyx1/main/downloader.lua" 
+local LOADER_URL = "https://raw.githubusercontent.com/n4yxx/nyxv5/main/downloader.lua" 
 local _initArgs = ...
 if type(_initArgs) ~= "table" then _initArgs = {} end
 shared.NYXUser = "spookers 👻"
@@ -51,7 +51,7 @@ local function checkForUpdates()
 	end
 	local current = isfile('NYX/profiles/commit.txt') and readfile('NYX/profiles/commit.txt') or ''
 	local ok, res = pcall(function()
-		return game:HttpGet('https://api.github.com/repos/nyxv4/nyx1/commits/main', true)
+		return game:HttpGet('https://api.github.com/repos/n4yxx/nyxv5/commits/main', true)
 	end)
 	local latest = ok and type(res) == 'string' and res:match('"sha"%s*:%s*"(%x+)"')
 	if not latest or #latest ~= 40 then
@@ -136,7 +136,7 @@ local function downloadFile(path, func, forceRef)
 					commit = isfile('NYX/profiles/commit.txt') and readfile('NYX/profiles/commit.txt')
 				end
 				if commit == nil or commit == '' then commit = 'main' end
-				return game:HttpGet('https://raw.githubusercontent.com/nyxv4/nyx1/' .. commit .. '/' .. select(1, path:gsub('^NYX/', '')), true)
+				return game:HttpGet('https://raw.githubusercontent.com/n4yxx/nyxv5/' .. commit .. '/' .. select(1, path:gsub('^NYX/', '')), true)
 			end)
 			if suc and type(result) == 'string' and #result > 0 and result ~= '404: Not Found' then
 				res = result
