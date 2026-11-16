@@ -9429,6 +9429,593 @@ run(function()
 			if FireballCooldown then FireballCooldown.Object.Visible = (Fireballs and Fireballs.Enabled) end
 		end
 	end)
+
+	-- GrandKillaura: ported from upstream, fully independent state from Killaura
+	local GrandKillaura
+	local GrandTargets
+	local GrandSort
+	local GrandSwingRange
+	local GrandAttackRange
+	local GrandChargeTime
+	local GrandAngle
+	local GrandMaxTargets
+	local GrandMouse
+	local GrandSwing
+	local GrandGUI
+	local GrandBoxSwingColor
+	local GrandBoxAttackColor
+	local GrandParticleTexture
+	local GrandParticleColor1
+	local GrandParticleColor2
+	local GrandParticleSize
+	local GrandFace
+	local GrandAnimation
+	local GrandAnimationMode
+	local GrandAnimationSpeed
+	local GrandAnimationTween
+	local GrandLimit
+	local GrandLegit
+	local GrandAirHit
+	local GrandAirHitsChance
+	local GrandAttackCheck
+	local GrandParticles, GrandBoxes = {}, {}
+	local GrandAttacking = false
+	local GrandSwingCooldown = 0
+	local GrandLastEffect = 0
+	local GrandAnimTween
+	local GrandArmC0
+	local GrandAnimActive = false
+	local GRAND_SERVER_REACH = 14.399
+
+	local function grandGetAttackData()
+		if not entitylib.isAlive then return false end
+		if not entitylib.character or not entitylib.character.RootPart then return false end
+		if not bedwars.SwordController or bedwars.SwordController.disableSwingState then return false end
+
+		if GrandMouse and GrandMouse.Enabled and not inputService:IsMouseButtonPressed(Enum.UserInputType.MouseButton1) then
+			return false
+		end
+
+		if GrandGUI and GrandGUI.Enabled then
+			local ok, open = pcall(function()
+				return bedwars.AppController:isLayerOpen(bedwars.UILayers.MAIN)
+			end)
+			if ok and open then return false end
+		end
+
+		local sword = (GrandLimit and GrandLimit.Enabled) and store.hand or store.tools.sword
+		if not sword or not sword.tool then return false end
+
+		if GrandLimit and GrandLimit.Enabled then
+			if not store.hand or store.hand.toolType ~= 'sword' then return false end
+			if bedwars.DaoController and bedwars.DaoController.chargingMaid then return false end
+		end
+
+		local meta = bedwars.ItemMeta[sword.tool.Name]
+		if not meta then return false end
+
+		if GrandLegit and GrandLegit.Enabled then
+			local lastSwing = bedwars.SwordController and bedwars.SwordController.lastSwing
+			if not lastSwing or (tick() - lastSwing) > 0.15 then return false end
+		end
+
+		return sword, meta
+	end
+
+	local function grandFireAttack(weaponInst, entityInstance, selfPos, targetPos)
+		if not AttackRemote then
+			pcall(function()
+				local _remotes = getgenv().remotes or remotes
+				AttackRemote = bedwars.Client:Get(_remotes.AttackEntity).instance
+			end)
+		end
+		if not AttackRemote then return false end
+
+		local delta = (targetPos - selfPos).Magnitude
+		if delta < 0.01 then return false end
+
+		local dir = CFrame.lookAt(selfPos, targetPos).LookVector
+		local pos = selfPos + dir * math.max(delta - GRAND_SERVER_REACH, 0)
+
+		local ok = pcall(function()
+			AttackRemote:FireServer({
+				weapon = weaponInst,
+				chargedAttack = {chargeRatio = 0},
+				lastSwingServerTimeDelta = 0.5,
+				entityInstance = entityInstance,
+				validate = {
+					raycast = {
+						cameraPosition = {value = pos},
+						cursorDirection = {value = dir}
+					},
+					targetPosition = {value = targetPos},
+					selfPosition = {value = pos}
+				}
+			})
+		end)
+		return ok
+	end
+
+	GrandKillaura = vape.Categories.Blatant:CreateModule({
+		Name = 'GrandKillaura',
+		Tooltip = 'Attack players around you\nwithout aiming at them.',
+		Function = function(callback)
+			if callback then
+				GrandAttacking = false
+				GrandSwingCooldown = 0
+				GrandLastEffect = 0
+
+				if inputService.TouchEnabled then
+					pcall(function()
+						lplr.PlayerGui.MobileUI['2'].Visible = GrandLimit.Enabled
+					end)
+				end
+
+				GrandAnimActive = GrandAnimation.Enabled and not (identifyexecutor and table.find({'Argon', 'Delta', 'Codex', 'Krampus', 'Solara', 'Xeno'}, ({identifyexecutor()})[1]))
+				if GrandAnimActive then
+					task.spawn(function()
+						local started = false
+						repeat
+							if GrandAttacking then
+								local okArm = pcall(function()
+									if not GrandArmC0 then
+										GrandArmC0 = gameCamera.Viewmodel.RightHand.RightWrist.C0
+									end
+								end)
+								if not okArm then
+									runService.Heartbeat:Wait()
+									continue
+								end
+								local first = not started
+								started = true
+								if GrandAnimationMode.Value == 'Random' then
+									anims.Random = {{CFrame = CFrame.Angles(math.rad(math.random(1, 360)), math.rad(math.random(1, 360)), math.rad(math.random(1, 360))), Time = 0.12}}
+								end
+								for _, frame in anims[GrandAnimationMode.Value] do
+									pcall(function()
+										if GrandAnimTween then GrandAnimTween:Destroy() GrandAnimTween = nil end
+										GrandAnimTween = tweenService:Create(gameCamera.Viewmodel.RightHand.RightWrist, TweenInfo.new(first and (GrandAnimationTween.Enabled and 0.001 or 0.1) or frame.Time / math.max(GrandAnimationSpeed.Value, 0.01), Enum.EasingStyle.Linear), {
+											C0 = GrandArmC0 * frame.CFrame
+										})
+										GrandAnimTween:Play()
+										GrandAnimTween.Completed:Wait()
+									end)
+									first = false
+									if (not GrandKillaura.Enabled) or (not GrandAttacking) then break end
+								end
+							elseif started then
+								started = false
+								pcall(function()
+									if GrandAnimTween then GrandAnimTween:Destroy() GrandAnimTween = nil end
+									GrandAnimTween = tweenService:Create(gameCamera.Viewmodel.RightHand.RightWrist, TweenInfo.new(GrandAnimationTween.Enabled and 0.001 or 0.3, Enum.EasingStyle.Exponential), {
+										C0 = GrandArmC0
+									})
+									GrandAnimTween:Play()
+								end)
+							end
+							if not started then
+								runService.Heartbeat:Wait()
+							end
+						until (not GrandKillaura.Enabled) or (not GrandAnimation.Enabled)
+					end)
+				end
+
+				repeat
+					if GrandAttackCheck.Enabled then
+						local triggered = false
+						local stunTime = lplr.Character and lplr.Character:GetAttribute('StunnedUntilTime')
+						if stunTime and stunTime > workspace:GetServerTimeNow() then triggered = true end
+						if not triggered and kitChecks then
+							for _, check in pairs(kitChecks) do
+								local ok, res = pcall(check)
+								if ok and res then triggered = true break end
+							end
+						end
+						if triggered then
+							GrandAttacking = false
+							store.KillauraTarget = nil
+							for _, box in GrandBoxes do box.Adornee = nil end
+							for _, part in GrandParticles do part.Parent = nil end
+							task.wait(0.3)
+							continue
+						end
+					end
+
+					local sword, meta = grandGetAttackData()
+					GrandAttacking = false
+					store.KillauraTarget = nil
+
+					local attacked = {}
+					if sword then
+						local plrs = entitylib.AllPosition({
+							Range = GrandSwingRange.Value,
+							Wallcheck = GrandTargets.Walls.Enabled or nil,
+							Part = 'RootPart',
+							Players = GrandTargets.Players.Enabled,
+							NPCs = GrandTargets.NPCs.Enabled,
+							Limit = GrandMaxTargets.Value,
+							Sort = sortmethods[GrandSort.Value]
+						})
+
+						if #plrs > 0 then
+							switchItem(sword.tool, 0)
+							local selfpos = entitylib.character.RootPart.Position
+							local localfacing = entitylib.character.RootPart.CFrame.LookVector * Vector3.new(1, 0, 1)
+							local maxAngle = math.rad(GrandAngle.Value) / 2
+
+							for _, v in plrs do
+								local delta = (v.RootPart.Position - selfpos)
+								local flat = delta * Vector3.new(1, 0, 1)
+								if flat.Magnitude > 1.0 and math.acos(math.clamp(localfacing:Dot(flat.Unit), -1, 1)) > maxAngle then continue end
+
+								table.insert(attacked, {
+									Entity = v,
+									Check = delta.Magnitude > GrandAttackRange.Value and GrandBoxSwingColor or GrandBoxAttackColor
+								})
+								targetinfo.Targets[v] = tick() + 1
+
+								if not GrandAttacking then
+									GrandAttacking = true
+									store.KillauraTarget = v
+
+									if not GrandSwing.Enabled and not GrandLegit.Enabled and not GrandAnimActive then
+										local effectInterval = math.max(GrandChargeTime.Value, 0.11)
+										if (tick() - GrandLastEffect) >= effectInterval then
+											GrandLastEffect = tick()
+											if isOnTinker() then
+												playTinkerSwing()
+											end
+											triggerFirstPersonSwing(meta)
+											if vape.ThreadFix and setthreadidentity then
+												pcall(setthreadidentity, 8)
+											end
+										end
+									end
+								end
+
+								if delta.Magnitude > GrandAttackRange.Value then continue end
+								if delta.Magnitude < 14.4 and (tick() - GrandSwingCooldown) < math.max(GrandChargeTime.Value, 0.02) then continue end
+
+								local tchar = v.Character
+								local actualRoot = tchar and tchar.PrimaryPart
+								if actualRoot then
+									if GrandAirHit.Enabled and GrandAirHitsChance.Value < 100 then
+										local hum = tchar:FindFirstChildOfClass('Humanoid')
+										if hum then
+											local inAir = hum.FloorMaterial == Enum.Material.Air
+											if not inAir then
+												local state = hum:GetState()
+												inAir = state == Enum.HumanoidStateType.Jumping or state == Enum.HumanoidStateType.Freefall
+											end
+											if not inAir then
+												inAir = math.abs(actualRoot.AssemblyLinearVelocity.Y) > 3
+											end
+											if inAir and math.random(1, 100) > GrandAirHitsChance.Value then continue end
+										end
+									end
+
+									if sword.tool.Name:find('summoner_claw') then
+										pcall(function() KaidaController:request(tchar) end)
+										continue
+									end
+
+									GrandSwingCooldown = tick()
+									if bedwars.SwordController then
+										bedwars.SwordController.lastAttack = workspace:GetServerTimeNow()
+									end
+									store.attackReach = (delta.Magnitude * 100) // 1 / 100
+									store.attackReachUpdate = tick() + 1
+
+									grandFireAttack(sword.tool, tchar, selfpos, actualRoot.Position)
+								end
+							end
+						end
+					end
+
+					for i, box in GrandBoxes do
+						local hit = attacked[i]
+						box.Adornee = hit and hit.Entity.RootPart or nil
+						if box.Adornee then
+							box.Color3 = Color3.fromHSV(hit.Check.Hue, hit.Check.Sat, hit.Check.Value)
+							box.Transparency = 1 - hit.Check.Opacity
+						end
+					end
+
+					for i, part in GrandParticles do
+						local hit = attacked[i]
+						part.Position = hit and hit.Entity.RootPart.Position or Vector3.new(9e9, 9e9, 9e9)
+						part.Parent = hit and gameCamera or nil
+					end
+
+					if GrandFace.Enabled and attacked[1] then
+						local vec = attacked[1].Entity.RootPart.Position * Vector3.new(1, 0, 1)
+						entitylib.character.RootPart.CFrame = CFrame.lookAt(entitylib.character.RootPart.Position, Vector3.new(vec.X, entitylib.character.RootPart.Position.Y + 0.001, vec.Z))
+					end
+
+					runService.Heartbeat:Wait()
+				until not GrandKillaura.Enabled
+			else
+				store.KillauraTarget = nil
+				for _, box in GrandBoxes do box.Adornee = nil end
+				for _, part in GrandParticles do part.Parent = nil end
+				if inputService.TouchEnabled then
+					pcall(function() lplr.PlayerGui.MobileUI['2'].Visible = true end)
+				end
+				GrandAttacking = false
+				GrandAnimActive = false
+				if GrandArmC0 then
+					pcall(function()
+						if GrandAnimTween then GrandAnimTween:Destroy() GrandAnimTween = nil end
+						GrandAnimTween = tweenService:Create(gameCamera.Viewmodel.RightHand.RightWrist, TweenInfo.new(GrandAnimationTween.Enabled and 0.001 or 0.3, Enum.EasingStyle.Exponential), {
+							C0 = GrandArmC0
+						})
+						GrandAnimTween:Play()
+					end)
+				end
+			end
+		end,
+	})
+
+	GrandTargets = GrandKillaura:CreateTargets({
+		Players = true,
+		NPCs = true
+	})
+
+	GrandSwingRange = GrandKillaura:CreateSlider({
+		Name = 'Swing range',
+		Min = 1,
+		Max = 18,
+		Default = 18,
+		Suffix = function(val) return val == 1 and 'stud' or 'studs' end
+	})
+	GrandAttackRange = GrandKillaura:CreateSlider({
+		Name = 'Attack range',
+		Min = 1,
+		Max = 18,
+		Default = 18,
+		Suffix = function(val) return val == 1 and 'stud' or 'studs' end
+	})
+	GrandChargeTime = GrandKillaura:CreateSlider({
+		Name = 'Swing time',
+		Min = 0,
+		Max = 0.5,
+		Default = 0.42,
+		Decimal = 100
+	})
+	GrandAngle = GrandKillaura:CreateSlider({
+		Name = 'Max angle',
+		Min = 1,
+		Max = 360,
+		Default = 360
+	})
+	GrandMaxTargets = GrandKillaura:CreateSlider({
+		Name = 'Max targets',
+		Min = 1,
+		Max = 5,
+		Default = 5
+	})
+	GrandSort = GrandKillaura:CreateDropdown({
+		Name = 'Target Mode',
+		List = getSortList({'Distance'})
+	})
+	GrandMouse = GrandKillaura:CreateToggle({Name = 'Require mouse down'})
+	GrandSwing = GrandKillaura:CreateToggle({Name = 'No Swing'})
+	GrandGUI = GrandKillaura:CreateToggle({Name = 'GUI check'})
+
+	GrandKillaura:CreateToggle({
+		Name = 'Show target',
+		Function = function(cb)
+			GrandBoxSwingColor.Object.Visible = cb
+			GrandBoxAttackColor.Object.Visible = cb
+			if cb then
+				for i = 1, 10 do
+					local box = Instance.new('BoxHandleAdornment')
+					box.Adornee = nil
+					box.AlwaysOnTop = true
+					box.Size = Vector3.new(3, 5, 3)
+					box.CFrame = CFrame.new(0, -0.5, 0)
+					box.ZIndex = 0
+					box.Parent = vape.gui
+					GrandBoxes[i] = box
+				end
+			else
+				for _, v in GrandBoxes do
+					v:Destroy()
+				end
+				table.clear(GrandBoxes)
+			end
+		end
+	})
+	GrandBoxSwingColor = GrandKillaura:CreateColorSlider({
+		Name = 'Target Color',
+		Darker = true,
+		DefaultHue = 0.6,
+		DefaultOpacity = 0.5,
+		Visible = false
+	})
+	GrandBoxAttackColor = GrandKillaura:CreateColorSlider({
+		Name = 'Attack Color',
+		Darker = true,
+		DefaultOpacity = 0.5,
+		Visible = false
+	})
+
+	GrandKillaura:CreateToggle({
+		Name = 'Target particles',
+		Function = function(cb)
+			GrandParticleTexture.Object.Visible = cb
+			GrandParticleColor1.Object.Visible = cb
+			GrandParticleColor2.Object.Visible = cb
+			GrandParticleSize.Object.Visible = cb
+			if cb then
+				for i = 1, 10 do
+					local part = Instance.new('Part')
+					part.Size = Vector3.new(2, 4, 2)
+					part.Anchored = true
+					part.CanCollide = false
+					part.Transparency = 1
+					part.CanQuery = false
+					part.Parent = GrandKillaura.Enabled and gameCamera or nil
+					local particles = Instance.new('ParticleEmitter')
+					particles.Brightness = 1.5
+					particles.Size = NumberSequence.new(GrandParticleSize.Value)
+					particles.Shape = Enum.ParticleEmitterShape.Sphere
+					particles.Texture = GrandParticleTexture.Value
+					particles.Transparency = NumberSequence.new(0)
+					particles.Lifetime = NumberRange.new(0.4)
+					particles.Speed = NumberRange.new(16)
+					particles.Rate = 128
+					particles.Drag = 16
+					particles.ShapePartial = 1
+					particles.Color = ColorSequence.new({
+						ColorSequenceKeypoint.new(0, Color3.fromHSV(GrandParticleColor1.Hue, GrandParticleColor1.Sat, GrandParticleColor1.Value)),
+						ColorSequenceKeypoint.new(1, Color3.fromHSV(GrandParticleColor2.Hue, GrandParticleColor2.Sat, GrandParticleColor2.Value))
+					})
+					particles.Parent = part
+					GrandParticles[i] = part
+				end
+			else
+				for _, v in GrandParticles do
+					v:Destroy()
+				end
+				table.clear(GrandParticles)
+			end
+		end
+	})
+	GrandParticleTexture = GrandKillaura:CreateTextBox({
+		Name = 'Texture',
+		Default = 'rbxassetid://14736249347',
+		Function = function()
+			for _, v in GrandParticles do
+				v.ParticleEmitter.Texture = GrandParticleTexture.Value
+			end
+		end,
+		Darker = true,
+		Visible = false
+	})
+	GrandParticleColor1 = GrandKillaura:CreateColorSlider({
+		Name = 'Color Begin',
+		Function = function(hue, sat, val)
+			for _, v in GrandParticles do
+				v.ParticleEmitter.Color = ColorSequence.new({
+					ColorSequenceKeypoint.new(0, Color3.fromHSV(hue, sat, val)),
+					ColorSequenceKeypoint.new(1, Color3.fromHSV(GrandParticleColor2.Hue, GrandParticleColor2.Sat, GrandParticleColor2.Value))
+				})
+			end
+		end,
+		Darker = true,
+		Visible = false
+	})
+	GrandParticleColor2 = GrandKillaura:CreateColorSlider({
+		Name = 'Color End',
+		Function = function(hue, sat, val)
+			for _, v in GrandParticles do
+				v.ParticleEmitter.Color = ColorSequence.new({
+					ColorSequenceKeypoint.new(0, Color3.fromHSV(GrandParticleColor1.Hue, GrandParticleColor1.Sat, GrandParticleColor1.Value)),
+					ColorSequenceKeypoint.new(1, Color3.fromHSV(hue, sat, val))
+				})
+			end
+		end,
+		Darker = true,
+		Visible = false
+	})
+	GrandParticleSize = GrandKillaura:CreateSlider({
+		Name = 'Size',
+		Min = 0,
+		Max = 1,
+		Default = 0.2,
+		Decimal = 100,
+		Function = function(val)
+			for _, v in GrandParticles do
+				v.ParticleEmitter.Size = NumberSequence.new(val)
+			end
+		end,
+		Darker = true,
+		Visible = false
+	})
+	GrandFace = GrandKillaura:CreateToggle({Name = 'Face target'})
+	GrandAnimation = GrandKillaura:CreateToggle({
+		Name = 'Custom Animation',
+		Function = function(cb)
+			GrandAnimationMode.Object.Visible = cb
+			GrandAnimationTween.Object.Visible = cb
+			GrandAnimationSpeed.Object.Visible = cb
+			if GrandKillaura.Enabled then
+				GrandKillaura:Toggle()
+				GrandKillaura:Toggle()
+			end
+		end
+	})
+	local grandAnimNames = {}
+	for i in anims do
+		table.insert(grandAnimNames, i)
+	end
+	GrandAnimationMode = GrandKillaura:CreateDropdown({
+		Name = 'Animation Mode',
+		List = grandAnimNames,
+		Darker = true,
+		Visible = false
+	})
+	GrandAnimationSpeed = GrandKillaura:CreateSlider({
+		Name = 'Animation Speed',
+		Min = 0,
+		Max = 2,
+		Default = 1,
+		Decimal = 10,
+		Darker = true,
+		Visible = false
+	})
+	GrandAnimationTween = GrandKillaura:CreateToggle({
+		Name = 'No Tween',
+		Darker = true,
+		Visible = false
+	})
+	GrandLimit = GrandKillaura:CreateToggle({
+		Name = 'Limit to items',
+		Function = function(cb)
+			if inputService.TouchEnabled and GrandKillaura.Enabled then
+				pcall(function()
+					lplr.PlayerGui.MobileUI['2'].Visible = cb
+				end)
+			end
+		end,
+		Tooltip = 'Only attacks when the sword is held'
+	})
+	GrandLegit = GrandKillaura:CreateToggle({
+		Name = 'Swing only',
+		Tooltip = 'Only attacks while swinging manually'
+	})
+	GrandAirHit = GrandKillaura:CreateToggle({
+		Name = 'Air Hits',
+		Default = true,
+		Tooltip = 'hit people in the air',
+		Function = function(cb)
+			if GrandAirHitsChance then
+				GrandAirHitsChance.Object.Visible = cb
+			end
+		end
+	})
+	GrandAirHitsChance = GrandKillaura:CreateSlider({
+		Name = 'Air Hits Chance',
+		Min = 0,
+		Max = 100,
+		Default = 100,
+		Suffix = '%',
+		Decimal = 5,
+		Darker = true,
+		Visible = false
+	})
+	GrandAttackCheck = GrandKillaura:CreateToggle({
+		Name = 'Attack Check',
+		Tooltip = 'checks if attacking ina legit way',
+		Default = false
+	})
+
+	task.defer(function()
+		if GrandAirHit and GrandAirHit.Enabled and GrandAirHitsChance and GrandAirHitsChance.Object then
+			GrandAirHitsChance.Object.Visible = true
+		end
+	end)
 end)
 						
 run(function()
