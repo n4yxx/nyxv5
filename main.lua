@@ -73,6 +73,24 @@ if not shared.VapeDeveloper then
 	if ok and res then latestCommit = res end
 end
 
+if bootstrapCommit and bootstrapCommit ~= '' then
+	local pinned = bootstrapCommit
+	local current = isfile('NYX/profiles/commit.txt') and readfile('NYX/profiles/commit.txt') or ''
+	if current ~= pinned then
+		local watermark = '--This watermark is used to delete the file if its cached, remove it to make the file persist after vape updates.'
+		for _, folder in {'NYX/games', 'NYX/guis', 'NYX/libraries'} do
+			for _, file in listfiles(folder) do
+				if isfile(file) and readfile(file):sub(1, #watermark) == watermark then
+					pcall(delfile, file)
+				end
+			end
+		end
+		writefile('NYX/profiles/commit.txt', pinned)
+		pcall(writefile, 'NYX/profiles/latest.txt', pinned)
+		latestCommit = pinned
+	end
+end
+
 if identifyexecutor and table.find({'Madium', 'Medium'}, ({identifyexecutor()})[1]) then
 	local realgca = getcustomasset or getsynasset
 	if realgca then
