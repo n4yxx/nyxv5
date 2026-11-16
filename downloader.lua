@@ -8,11 +8,11 @@ end
 local delfile = delfile or function(file) writefile(file, '') end
 
 local function downloadFile(path, func)
-	if not isfile(path) then
+	if not isfile(path) or readfile(path) == '' then
 		local suc, res = pcall(function()
 			return game:HttpGet('https://raw.githubusercontent.com/nyxv4/nyx1/'..readfile('aerov4/profiles/commit.txt')..'/'..select(1, path:gsub('aerov4/', '')), true)
 		end)
-		if not suc or res == '404: Not Found' then error(res) end
+		if not suc or type(res) ~= 'string' or res == '' or res == '404: Not Found' then error(res) end
 		if path:find('%.lua') then
 			res = '--This watermark is used to delete the file if its cached, remove it to make the file persist after vape updates.\n'..res
 		end
@@ -60,7 +60,7 @@ local function downloadPremadeProfiles(commit)
 					local fileId = (game.GameId == 2619619496) and game.GameId or game.PlaceId
 					local filePath = 'aerov4/profiles/premade/' .. baseName .. tostring(fileId) .. '.txt'
 					local ds, dc = pcall(function() return game:HttpGet(file.download_url, true) end)
-					if ds and dc and dc ~= '404: Not Found' then writefile(filePath, dc) end
+					if ds and dc and type(dc) == 'string' and #dc > 0 and dc ~= '404: Not Found' then writefile(filePath, dc) end
 				end
 			end
 		end

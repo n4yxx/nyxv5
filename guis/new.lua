@@ -1434,12 +1434,12 @@ local function createMobileButton(moduleapi, position, savedW, savedH)
 end
 
 local function downloadFile(path, func)
-	if not isfile(path) then
+	if not isfile(path) or readfile(path) == '' then
 		createDownloader(path)
 		local suc, res = pcall(function()
-			return game:HttpGet('https://raw.githubusercontent.com/nyxv4nyx1/'..readfile('aerov4/profiles/commit.txt')..'/'..select(1, path:gsub('aerov4/', '')), true)
+			return game:HttpGet('https://raw.githubusercontent.com/nyxv4/nyx1/'..((isfile('aerov4/profiles/commit.txt') and readfile('aerov4/profiles/commit.txt')) or 'main')..'/'..select(1, path:gsub('aerov4/', '')), true)
 		end)
-		if not suc or res == '404: Not Found' then
+		if not suc or type(res) ~= 'string' or res == '' or res == '404: Not Found' then
 			error(res)
 		end
 		if path:find('.lua') then
@@ -9554,7 +9554,7 @@ general:CreateButton({
 		if shared.VapeDeveloper then
 			loadstring(readfile('aerov4/main.lua'), 'loader')()
 		else
-			loadstring(game:HttpGet('https://raw.githubusercontent.com/nyxv4nyx1/'..readfile('aerov4/profiles/commit.txt')..'/main.lua', true))()
+			loadstring(game:HttpGet('https://raw.githubusercontent.com/nyxv4/nyx1/'..((isfile('aerov4/profiles/commit.txt') and readfile('aerov4/profiles/commit.txt')) or 'main')..'/main.lua', true))()
 		end
 	end,
 	Tooltip = 'This will set your profile to the default settings of Vape'
@@ -9573,7 +9573,7 @@ general:CreateButton({
 		if shared.VapeDeveloper then
 			loadstring(readfile('aerov4/main.lua'), 'loader')()
 		else
-			loadstring(game:HttpGet('https://raw.githubusercontent.com/nyxv4nyx1/'..readfile('aerov4/profiles/commit.txt')..'/main.lua', true))()
+			loadstring(game:HttpGet('https://raw.githubusercontent.com/nyxv4/nyx1/'..((isfile('aerov4/profiles/commit.txt') and readfile('aerov4/profiles/commit.txt')) or 'main')..'/main.lua', true))()
 		end
 	end,
 	Tooltip = 'Reloads vape for debugging purposes'
@@ -9762,7 +9762,7 @@ guipane:CreateDropdown({
 			if shared.VapeDeveloper then
 				loadstring(readfile('aerov4/main.lua'), 'loader')()
 			else
-				loadstring(game:HttpGet('https://raw.githubusercontent.com/nyxv4nyx1/'..readfile('aerov4/profiles/commit.txt')..'/main.lua', true))()
+				loadstring(game:HttpGet('https://raw.githubusercontent.com/nyxv4/nyx1/'..((isfile('aerov4/profiles/commit.txt') and readfile('aerov4/profiles/commit.txt')) or 'main')..'/main.lua', true))()
 			end
 		end
 	end,

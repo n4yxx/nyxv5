@@ -40,10 +40,10 @@ end
 
 local function checkForUpdates()
 	local watermark = '--This watermark is used to delete the file if its cached, remove it to make the file persist after vape updates.'
-	for _, folder in {'nyx', 'NYX/games', 'NYX/profiles', 'NYX/assets', 'NYX/libraries', 'NYX/guis'} do
+	for _, folder in {'NYX', 'NYX/games', 'NYX/profiles', 'NYX/assets', 'NYX/libraries', 'NYX/guis'} do
 		if not isfolder(folder) then makefolder(folder) end
 	end
-	local current = isfile('aerov4/profiles/commit.txt') and readfile('NYX/profiles/commit.txt') or ''
+	local current = isfile('NYX/profiles/commit.txt') and readfile('NYX/profiles/commit.txt') or ''
 	local ok, res = pcall(function()
 		return game:HttpGet('https://api.github.com/repos/nyxv4/nyx1/commits/main', true)
 	end)
@@ -53,7 +53,7 @@ local function checkForUpdates()
 		return
 	end
 	if latest == current then return end
-	for _, folder in {'NYX', 'NYX/games', 'NYX/guis', '/libraries'} do
+	for _, folder in {'NYX', 'NYX/games', 'NYX/guis', 'NYX/libraries'} do
 		for _, file in listfiles(folder) do
 			if isfile(file) and readfile(file):sub(1, #watermark) == watermark then
 				pcall(delfile, file)
@@ -98,14 +98,16 @@ local httpService = cloneref(game:GetService('HttpService'))
 local teleportService = cloneref(game:GetService('TeleportService'))
 
 local function downloadFile(path, func)
-	if not isfile(path) then
+	if not isfile(path) or readfile(path) == '' then
 		local res
 		local success = false
 		for attempt = 1, 3 do
 			local suc, result = pcall(function()
-				return game:HttpGet('https://raw.githubusercontent.com/nyxv4/nyx1/' .. readfile('NYX/profiles/commit.txt') .. '/' .. select(1, path:gsub('aerov4/', '')), true)
+				local commit = isfile('NYX/profiles/commit.txt') and readfile('NYX/profiles/commit.txt')
+				if commit == nil or commit == '' then commit = 'main' end
+				return game:HttpGet('https://raw.githubusercontent.com/nyxv4/nyx1/' .. commit .. '/' .. select(1, path:gsub('^NYX/', '')), true)
 			end)
-			if suc and result ~= '404: Not Found' then
+			if suc and type(result) == 'string' and #result > 0 and result ~= '404: Not Found' then
 				res = result
 				success = true
 				break
@@ -289,7 +291,7 @@ if not shared.VapeIndependent then
 	loadstring(downloadFile('NYX/games/universal.lua'), 'universal')()
 	local gameFileId = (game.GameId == 2619619496) and (game.PlaceId == 6872265039 and 6872265039 or 6872274481) or (game.GameId == 10516888336 and 10516888336 or game.PlaceId)
 
-	if isfile('NYX/games/' .. gameFileId .. '.lua') then
+	if isfile('NYX/games/' .. gameFileId .. '.lua') and #readfile('NYX/games/' .. gameFileId .. '.lua') > 0 then
 		local gameSrc = downloadFile('NYX/games/' .. gameFileId .. '.lua')
 		local gameFunc, gameErr = loadstring(gameSrc, tostring(gameFileId))
 		if not gameFunc then
@@ -336,7 +338,7 @@ if not shared.VapeIndependent then
 			local suc, res = pcall(function()
 				return game:HttpGet('https://raw.githubusercontent.com/nyxv4/nyx1/' .. readfile('NYX/profiles/commit.txt') .. '/games/' .. gameFileId .. '.lua', true)
 			end)
-			if suc and res and res ~= '404: Not Found' then
+			if suc and type(res) == 'string' and #res > 0 and res ~= '404: Not Found' then
 				local path = 'NYX/games/' .. gameFileId .. '.lua'
 				if not isfile(path) then
 					writefile(path, '--This watermark is used to delete the file if its cached, remove it to make the file persist after vape updates.\n' .. res)

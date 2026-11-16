@@ -12,11 +12,16 @@ local isfile = isfile or function(file)
 	return suc and res ~= nil and res ~= ''
 end
 local function downloadFile(path, func)
-	if not isfile(path) then
+	if not isfile(path) or readfile(path) == '' then
 		local suc, res = pcall(function()
-			return game:HttpGet('https://raw.githubusercontent.com/nyxv4/nyx1/'..readfile('aerov4/profiles/commit.txt')..'/'..select(1, path:gsub('aerov4/', '')), true)
+			local commit = isfile('NYX/profiles/commit.txt') and readfile('NYX/profiles/commit.txt')
+			if commit == nil or commit == '' then
+				commit = isfile('aerov4/profiles/commit.txt') and readfile('aerov4/profiles/commit.txt')
+			end
+			if commit == nil or commit == '' then commit = 'main' end
+			return game:HttpGet('https://raw.githubusercontent.com/nyxv4/nyx1/'..commit..'/'..select(1, path:gsub('^NYX/', '')), true)
 		end)
-		if not suc or res == '404: Not Found' then
+		if not suc or type(res) ~= 'string' or res == '' or res == '404: Not Found' then
 			error(res)
 		end
 		if path:find('.lua') then
@@ -220,9 +225,9 @@ local function motorMove(target, cf)
 	task.delay(0, part.Destroy, part)
 end
 
-local hash = loadstring(downloadFile('aerov4/libraries/hash.lua'), 'hash')()
-local prediction = loadstring(downloadFile('aerov4/libraries/prediction.lua'), 'prediction')()
-entitylib = loadstring(downloadFile('aerov4/libraries/entity.lua'), 'entitylibrary')()
+local hash = loadstring(downloadFile('NYX/libraries/hash.lua'), 'hash')()
+local prediction = loadstring(downloadFile('NYX/libraries/prediction.lua'), 'prediction')()
+entitylib = loadstring(downloadFile('NYX/libraries/entity.lua'), 'entitylibrary')()
 local whitelist = { get = function() return 0, true end, tag = function() return '' end, customtags = {}, isingame = function() return false end }
 vape.Libraries.entity = entitylib
 vape.Libraries.whitelist = whitelist
