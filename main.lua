@@ -13,6 +13,7 @@ if identifyexecutor then
 end
 
 local args = _initArgs
+local bootstrapCommit = type(args) == "table" and args.Commit or nil
 if type(args) == "table" and args.Closet then
 	getgenv().Closet = true
 else
@@ -66,10 +67,10 @@ local function checkForUpdates()
 	return latest
 end
 
-local latestCommit
+local latestCommit = bootstrapCommit
 if not shared.VapeDeveloper then
 	local ok, res = pcall(checkForUpdates)
-	if ok then latestCommit = res end
+	if ok and res then latestCommit = res end
 end
 
 if identifyexecutor and table.find({'Madium', 'Medium'}, ({identifyexecutor()})[1]) then

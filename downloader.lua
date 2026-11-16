@@ -119,4 +119,5 @@ end
 
 return loadstring(downloadFile('aerov4/main.lua', nil, forceRef), 'main')({
 	Closet = _args.Closet,
+	Commit = forceRef,
 })
