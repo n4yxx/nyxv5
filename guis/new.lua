@@ -290,31 +290,6 @@ local function checkKeybinds(compare, target, key)
 	return false
 end
 
-local function createDownloader(text)
-	if mainapi.Loaded ~= true then
-		local downloader = mainapi.Downloader
-		if not downloader then
-			downloader = Instance.new('TextLabel')
-			downloader.Size = UDim2.new(1, 0, 0, 40)
-			downloader.BackgroundTransparency = 1
-			downloader.TextStrokeTransparency = 0
-			downloader.TextSize = 20
-			downloader.TextColor3 = Color3.new(1, 1, 1)
-			downloader.FontFace = uipallet.Font
-			local holder = Instance.new('ScreenGui')
-			holder.Name = 'Loading'
-			holder.DisplayOrder = 9999999
-			holder.IgnoreGuiInset = true
-			holder.ResetOnSpawn = false
-			pcall(function() holder.Parent = mainapi.gui.Parent end)
-			downloader.Parent = holder
-			mainapi.Downloader = downloader
-			mainapi.DownloaderGui = holder
-		end
-		downloader.Text = 'Downloading '..text
-	end
-end
-
 local mobileEditorOpen = false
 local mobileEditorBG = nil
 local mobileButtons = {}
@@ -1445,7 +1420,6 @@ local function isValidAsset(path)
 end
 local function downloadFile(path, func, forceRef, sourcePath)
 	if forceRef or not isValidAsset(path) then
-		createDownloader(path)
 		local suc, res = pcall(function()
 			local ref = forceRef or ((isfile('NYX/profiles/commit.txt') and readfile('NYX/profiles/commit.txt')) or 'main')
 			return game:HttpGet('https://raw.githubusercontent.com/nyxv4/nyx1/'..ref..'/'..select(1, (sourcePath or path):gsub('NYX/', '')), true)
@@ -8294,16 +8268,6 @@ function mainapi:Load(skipgui, profile)
 
 	self:UpdateTextGUI(true)
 	gui.Enabled = true
-
-	if self.Downloader then
-		self.Downloader:Destroy()
-		self.Downloader = nil
-	end
-
-	if self.DownloaderGui then
-		self.DownloaderGui:Destroy()
-		self.DownloaderGui = nil
-	end
 
 	if mainapi.ThreadFix then
 		setthreadidentity(8)
