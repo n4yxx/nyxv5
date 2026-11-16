@@ -8893,8 +8893,6 @@ run(function()
 	local GrandUpdateRate
 	local GrandAngle
 	local GrandMaxTargets
-	local GrandHitregMode
-	local GrandDynamicDelay
 	local GrandMouse
 	local GrandSwing
 	local GrandGUI
@@ -8929,17 +8927,6 @@ run(function()
 	local GrandAnimActive = false
 	local GRAND_SERVER_REACH = 14.399
 	local GRAND_HIT_PERIOD = 0.29583333333333334
-
-	local function getGrandAttackDelay(meta)
-		local mode = (GrandHitregMode and GrandHitregMode.Value) or 'Stealth Mode'
-		local dynDelay = (GrandDynamicDelay and GrandDynamicDelay.Value) or 100
-		local Speed = meta.sword and meta.sword.attackSpeed or 0.3
-		local effectiveDelay = 50
-		if mode == 'Dynamic' then
-			effectiveDelay = dynDelay
-		end
-		return quantize240(SwordTiming.Calculate(Speed, 'Dynamic', effectiveDelay, 0, 35))
-	end
 
 	function GrandFire.projectileInHand()
 		local live = liveHandTool()
@@ -9186,7 +9173,7 @@ run(function()
 
 				local sword, meta = grandGetAttackData()
 				if sword and meta then
-					GrandFire.Period = getGrandAttackDelay(meta)
+					GrandFire.Period = getAttackDelay(meta)
 				end
 
 				local heartbeatDt = 1 / 60
@@ -9498,27 +9485,6 @@ run(function()
 		Min = 1,
 		Max = 5,
 		Default = 5
-	})
-	GrandHitregMode = GrandKillaura:CreateDropdown({
-		Name = 'Grand Hitreg Mode',
-		List = {'Stealth Mode', 'Dynamic'},
-		Default = 'Stealth Mode',
-		Tooltip = 'GrandKillaura hit spacing mode',
-		Function = function(val)
-			if GrandDynamicDelay and GrandDynamicDelay.Object then
-				GrandDynamicDelay.Object.Visible = (val == 'Dynamic')
-			end
-		end
-	})
-	GrandDynamicDelay = GrandKillaura:CreateSlider({
-		Name = 'Dynamic Delay',
-		Min = 1,
-		Max = 100,
-		Default = 100,
-		Suffix = '%',
-		Darker = true,
-		Visible = false,
-		Tooltip = 'GrandKillaura hit spacing when Dynamic Hitreg Mode is selected'
 	})
 	GrandMouse = GrandKillaura:CreateToggle({Name = 'Require mouse down'})
 	GrandSwing = GrandKillaura:CreateToggle({Name = 'No Swing'})
