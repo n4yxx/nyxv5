@@ -6694,14 +6694,9 @@ run(function()
 		return Spacing, Scale, Gap, math.max(Speed - SwordTiming.CooldownCorrection, 0), Stock
 	end
 
-	-- Pinned cadence: 0.279 quantizes to 67/240 = 0.279167s, i.e. ~35.8 hits per 10s.
-	-- GhostDelay still adds slack on its own if the server starts dropping sends.
+	-- Fixed cadence: 0.279 quantizes to 67/240 = 0.279167s, i.e. ~35.8 hits per 10s.
 	SwordTiming.Target = 0.279
 	SwordTiming.Budget = SwordTiming.Target
-	SwordTiming.GhostDelay = 0
-	SwordTiming.GhostHold = 0
-	SwordTiming.GhostSeen = false
-	SwordTiming.Pending = {}
 
 	function SwordTiming.furyScale()
 		local now = tick()
@@ -6731,49 +6726,6 @@ run(function()
 		end
 		SwordTiming._fury = scale
 		return scale
-	end
-
-	function SwordTiming.noteSend(target)
-		local q = SwordTiming.Pending
-		if #q >= 10 then table.remove(q, 1) end
-		table.insert(q, {target = target, clock = tick()})
-	end
-
-	function SwordTiming.noteDamage(target)
-		SwordTiming.GhostSeen = true
-		local q = SwordTiming.Pending
-		for i = #q, 1, -1 do
-			if q[i].target == target then
-				table.remove(q, i)
-				return
-			end
-		end
-	end
-
-	function SwordTiming.sweep()
-		local q = SwordTiming.Pending
-		if not SwordTiming.GhostSeen then
-			if q[1] then table.clear(q) end
-			return
-		end
-		local now = tick()
-		local limit = 0.5 + netPing() * 1.5
-		for i = #q, 1, -1 do
-			if (now - q[i].clock) > limit then
-				table.remove(q, i)
-				SwordTiming.GhostHold = now + 3
-				SwordTiming.GhostDelay = math.min(SwordTiming.GhostDelay + 0.002, 0.02)
-			end
-		end
-		if SwordTiming.GhostDelay > 0 and now > SwordTiming.GhostHold then
-			SwordTiming.GhostDelay = math.max(SwordTiming.GhostDelay - 0.001, 0)
-		end
-	end
-
-	function SwordTiming.resetGhost()
-		table.clear(SwordTiming.Pending)
-		SwordTiming.GhostDelay = 0
-		SwordTiming.GhostHold = 0
 	end
 
 	-- catvape's guard: never send sooner than the sword's own attack speed after ANY
@@ -6849,12 +6801,6 @@ run(function()
 		end
 	end
 
-	vape:Clean(vapeEvents.EntityDamageEvent.Event:Connect(function(damageTable)
-		if damageTable.fromEntity ~= lplr.Character or damageTable.damageType ~= 0 then return end
-		if typeof(damageTable.entityInstance) ~= 'Instance' then return end
-		SwordTiming.noteDamage(damageTable.entityInstance)
-	end))
-
 	-- 240Hz Quantized Clock
 	local preciseRemainder = 0
 	local preciseTimestamp = tick()
@@ -6912,7 +6858,7 @@ run(function()
 		
 		-- This decouples hit registration from animation speed
 		local Spacing = SwordTiming.Calculate(Speed, 'Dynamic', effectiveDelay, Budget, Hits)
-		return quantize240(Spacing + (SwordTiming.GhostDelay or 0))
+		return quantize240(Spacing)
 	end
 
 	local function markAttackResult(success)
@@ -8250,7 +8196,6 @@ run(function()
 		markAttackResult(true)
 
 		kaLastSend = srvNow
-		SwordTiming.noteSend(tchar)
 		if kaLastSrv > 0 then
 			kaLastSrv = kaLastSrv + kaPeriod
 			if kaLastSrv < srvNow then
@@ -8270,7 +8215,6 @@ run(function()
 	local function startKillauraFireLoop()
 		if killauraFireLoop then return end
 
-		SwordTiming.resetGhost()
 		kaPeriod = HIT_PERIOD
 		animPeriod = NORMAL_SWORD_SWING_SPEED
 		kaNextFire = 0
@@ -8291,7 +8235,6 @@ run(function()
 				end
 
 				updatePreciseClock()
-				SwordTiming.sweep()
 
 				local heartbeatDt = 1 / 60
 				local target = kaPeriod - math.min(heartbeatDt * 0.5, kaPeriod * 0.06)
@@ -8307,7 +8250,6 @@ run(function()
 			pcall(task.cancel, killauraFireLoop)
 			killauraFireLoop = nil
 		end
-		SwordTiming.resetGhost()
 		_graceTarget = nil
 		_graceUntil = 0
 		_fastAcqTime = 0
@@ -9176,7 +9118,6 @@ run(function()
 		end
 		store.attackReach = (dist * 100) // 1 / 100
 		store.attackReachUpdate = tick() + 1
-		SwordTiming.noteSend(tchar)
 		if bedwars.SwordController then
 			bedwars.SwordController.lastAttack = srvNow
 		end
@@ -9187,7 +9128,6 @@ run(function()
 		if GrandFire.Loop then return end
 
 		GrandFire.Period = GRAND_HIT_PERIOD
-		SwordTiming.resetGhost()
 		GrandLastSrv = workspace:GetServerTimeNow() - GrandFire.Period
 		GrandFire.GraceTarget, GrandFire.GraceUntil = nil, 0
 		GrandFire.AcqTime, GrandFire.AcqRes = 0, nil
@@ -9199,7 +9139,6 @@ run(function()
 			while GrandKillaura and GrandKillaura.Enabled do
 				runService.Heartbeat:Wait()
 				GrandFire.watchHand()
-				SwordTiming.sweep()
 
 				local meta = GrandFire.swordMeta()
 				if meta then
@@ -9226,7 +9165,6 @@ run(function()
 		GrandFire.LastSword = nil
 		GrandFire.HoldTarget, GrandFire.HoldUntil = nil, 0
 		GrandLastSrv = 0
-		SwordTiming.resetGhost()
 	end
 
 	GrandKillaura = vape.Categories.Blatant:CreateModule({
