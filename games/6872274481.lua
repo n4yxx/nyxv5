@@ -8931,14 +8931,12 @@ run(function()
 	local GRAND_HIT_PERIOD = 0.29583333333333334
 
 	local function getGrandAttackDelay(meta)
-		local mode = (GrandHitregMode and GrandHitregMode.Value) or 'Advanced Mode'
+		local mode = (GrandHitregMode and GrandHitregMode.Value) or 'Stealth Mode'
 		local dynDelay = (GrandDynamicDelay and GrandDynamicDelay.Value) or 100
 		local Speed = meta.sword and meta.sword.attackSpeed or 0.3
 		local effectiveDelay = 50
 		if mode == 'Dynamic' then
 			effectiveDelay = dynDelay
-		elseif mode == 'Advanced Mode' then
-			effectiveDelay = 49.55
 		end
 		return quantize240(SwordTiming.Calculate(Speed, 'Dynamic', effectiveDelay, 0, 35))
 	end
@@ -9503,8 +9501,8 @@ run(function()
 	})
 	GrandHitregMode = GrandKillaura:CreateDropdown({
 		Name = 'Hitreg Mode',
-		List = {'Stealth Mode', 'Advanced Mode', 'Dynamic'},
-		Default = 'Advanced Mode',
+		List = {'Stealth Mode', 'Dynamic'},
+		Default = 'Stealth Mode',
 		Tooltip = 'GrandKillaura hit spacing mode',
 		Function = function(val)
 			if GrandDynamicDelay and GrandDynamicDelay.Object then
@@ -9522,7 +9520,6 @@ run(function()
 		Visible = false,
 		Tooltip = 'GrandKillaura hit spacing when Dynamic Hitreg Mode is selected'
 	})
-	GrandHitregMode:SetValue('Advanced Mode')
 	GrandMouse = GrandKillaura:CreateToggle({Name = 'Require mouse down'})
 	GrandSwing = GrandKillaura:CreateToggle({Name = 'No Swing'})
 	GrandGUI = GrandKillaura:CreateToggle({Name = 'GUI check'})
