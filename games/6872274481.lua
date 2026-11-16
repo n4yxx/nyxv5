@@ -6141,759 +6141,485 @@ run(function()
 		Tooltip = 'makes you go slightly faster when damaged'
 	})
 end)
-
 run(function()
 	local ProjectileAimbot
-	local TargetPart
 	local Targets
+	local Sort
+	local PartOption
 	local FOV
-	local Range
-	local OtherProjectiles
-	local Blacklist
-	local SortMethod
-	local skidPAChargePercent
-	local RandomHeadPercent
-	local RandomTorsoPercent
-	local DesirePAWorkMode
-	local DesirePAHideCursor
-	local DesirePACursorViewMode
-	local DesirePACursorLimitBow
-	local DesirePACursorShowGUI
-	local cursorRenderConnection
-	local lastGUIState = false
-	local rayCheck = RaycastParams.new()
-	rayCheck.FilterType = Enum.RaycastFilterType.Include
-	local _rayMap = nil
-	local function refreshRayCheck()
-		local map = workspace:FindFirstChild('Map')
-		if map ~= _rayMap or not map or not map.Parent then
-			_rayMap = map
-			if map and map.Parent then
-				rayCheck.FilterDescendantsInstances = {map}
-			else
-				rayCheck.FilterType = Enum.RaycastFilterType.Exclude
-				rayCheck.FilterDescendantsInstances = {lplr.Character, gameCamera}
-				return
-			end
-			rayCheck.FilterType = Enum.RaycastFilterType.Include
-		end
-	end
-	refreshRayCheck()
-	local old
-	local math_sqrt = math.sqrt
-	local math_rad = math.rad
-	local math_cos = math.cos
-	local math_clamp = math.clamp
-	local math_min = math.min
-	local math_max = math.max
-	local lockedRandomPart = nil
-	local wasHovering = false
-	local _paVelHistory = {}
-	local CustomPredictions
-	local PredictHorizontal
-	local PredictVertical
-	local PAFOVCircle
-	local paFOVCircleDrawing = nil
+	local Distance
+	local CircleColor
+	local CircleTransparency
+	local CircleThickness
+	local CircleFilled
+	local CircleObject
+	local Horizontal
+	local Vertical
 	local AutoCharge
-	local paFOVCircleConnection = nil
+	local Aim
+	local OtherProjectiles
+	local UseUmeko
+	local Potions
+	local Blacklist
+	local MiloCheck
+	local Old, Hook
+	local ArcCheck = RaycastParams.new()
+	ArcCheck.FilterType = Enum.RaycastFilterType.Exclude
 
-	local paFOVCircleDrawing = nil 
-	local paFOVCircleConnection = nil
+	local TargetLimbs = {
+		Torso = {'UpperTorso', 'LowerTorso'},
+		['Left arm'] = {'LeftUpperArm', 'LeftLowerArm', 'LeftHand'},
+		['Right arm'] = {'RightUpperArm', 'RightLowerArm', 'RightHand'},
+		['Left leg'] = {'LeftUpperLeg', 'LeftLowerLeg', 'LeftFoot'},
+		['Right leg'] = {'RightUpperLeg', 'RightLowerLeg', 'RightFoot'}
+	}
+	local LimbOrder = {'Head', 'Torso', 'Left arm', 'Right arm', 'Left leg', 'Right leg'}
+	local RandomLimb = setmetatable({}, {__mode = 'k'})
 
-	local function runPAFOVCircle(call)
-		if paFOVCircleConnection then
-			paFOVCircleConnection:Disconnect()
-			paFOVCircleConnection = nil
+	local function IsHeadshotProjectile(itemType)
+		if not itemType then return false end
+		local lower = tostring(itemType):lower()
+		if lower:find('headhunter', 1, true) or lower:find('tactical', 1, true) then
+			return true
 		end
-		if paFOVCircleDrawing then
-			paFOVCircleDrawing:Destroy()
-			paFOVCircleDrawing = nil
-		end
-		if not call then return end
+		return store.equippedKit == 'archer'
+	end
 
-		paFOVCircleDrawing = Instance.new('Frame')
-		paFOVCircleDrawing.Name = 'PAFOVCircle'
-		paFOVCircleDrawing.BackgroundTransparency = 1
-		paFOVCircleDrawing.AnchorPoint = Vector2.new(0.5, 0.5)
-		paFOVCircleDrawing.Visible = false
-		local stroke = Instance.new('UIStroke')
-		stroke.Thickness = 1
-		stroke.Color = Color3.fromRGB(255, 255, 255)
-		stroke.Parent = paFOVCircleDrawing
-		local corner = Instance.new('UICorner')
-		corner.CornerRadius = UDim.new(1, 0)
-		corner.Parent = paFOVCircleDrawing
-		paFOVCircleDrawing.Parent = vape.gui
+	local function IsDisguised(Ent)
+		if not Ent.Player then return false end
+		return workspace:FindFirstChild('DisguisedPlayerBlock_' .. Ent.Player.UserId) ~= nil
+	end
 
-		paFOVCircleConnection = runService.RenderStepped:Connect(function()
-			if not paFOVCircleDrawing or not FOV or not FOV.Value then
-				paFOVCircleDrawing.Visible = false
-				return
+	local function GetTargetPart(Ent, Mode)
+		if Mode == 'Random' and Ent.Character then
+			local Pick = RandomLimb[Ent.Character]
+			if not Pick or tick() > Pick.Clock then
+				Pick = {Value = LimbOrder[math.random(1, #LimbOrder)], Clock = tick() + 1}
+				RandomLimb[Ent.Character] = Pick
 			end
-
-			local shouldShow = false
-			if PAFOVCircle and PAFOVCircle.Enabled and ProjectileAimbot and ProjectileAimbot.Enabled then
-				local tool = store.hand and store.hand.tool
-				local itemType = tool and tool.Name or ""
-				local itemMeta = bedwars.ItemMeta and bedwars.ItemMeta[itemType]
-				if store.owlAiming or itemType == 'owl_orb' then
-					shouldShow = true
-				elseif itemMeta and itemMeta.projectileSource then
-					local src = itemMeta.projectileSource
-					local isArrow = src.ammoItemTypes and table.find(src.ammoItemTypes, 'arrow')
-					local isHeadhunter = itemType:find('headhunter')
-					if isArrow or isHeadhunter then
-						shouldShow = true
-					elseif OtherProjectiles and OtherProjectiles.Enabled then
-						local projectileType = src.projectileType and (type(src.projectileType) == 'function' and src.projectileType('arrow') or src.projectileType) or ""
-						local blacklisted = false
-						for _, black in ipairs(Blacklist and Blacklist.ListEnabled or {}) do
-							if tostring(projectileType):find(black) then
-								blacklisted = true
-								break
-							end
-						end
-						if not blacklisted then
-							shouldShow = true
-						end
-					end
-				end
-			end
-
-			paFOVCircleDrawing.Visible = shouldShow
-
-			if shouldShow then
-				local mousePos
-				if inputService.TouchEnabled then
-					mousePos = gameCamera.ViewportSize / 2
-				else
-					local mp = inputService:GetMouseLocation()
-					mousePos = Vector2.new(mp.X, mp.Y)
-				end
-				paFOVCircleDrawing.Position = UDim2.fromOffset(mousePos.X, mousePos.Y)
-				paFOVCircleDrawing.Size = UDim2.fromOffset(FOV.Value * 2, FOV.Value * 2)
-			end
-		end)
-	end
-
-	local function hasBowEquipped()
-		if not store.hand or not store.hand.toolType then return false end
-		return store.hand.toolType == 'bow' or store.hand.toolType == 'crossbow'
-	end
-
-	local function shouldHideCursor()
-		if not DesirePAHideCursor or not DesirePAHideCursor.Enabled then return false end
-		if DesirePACursorShowGUI and DesirePACursorShowGUI.Enabled and isGUIOpen() then return false end
-		if DesirePACursorLimitBow and DesirePACursorLimitBow.Enabled and not hasBowEquipped() then return false end
-		local inFirstPerson = isFirstPerson()
-		if DesirePACursorViewMode then
-			if DesirePACursorViewMode.Value == 'First Person' then return inFirstPerson
-			elseif DesirePACursorViewMode.Value == 'Third Person' then return not inFirstPerson
-			end
+			Mode = Pick.Value
 		end
-		return true
-	end
 
-	local function updateCursor()
-		pcall(function() inputService.MouseIconEnabled = not shouldHideCursor() end)
-	end
-
-	local function checkGUIState()
-		local currentGUIState = isGUIOpen()
-		if lastGUIState ~= currentGUIState then
-			updateCursor()
-			lastGUIState = currentGUIState
+		if Mode == 'Head' then
+			return (Ent.Character and Ent.Character:FindFirstChild('Head')) or Ent.Head or Ent.RootPart
 		end
-	end
 
-	local paLockedTarget = nil
-	local paLockTime = 0
-	local paLeadStart = 0
-	local paVelSmooth = setmetatable({}, {__mode = 'k'})
-
-	local function paValidLock(originPos)
-		local t = paLockedTarget
-		if not t then return nil end
-		if tick() - paLockTime > 0.4 then return nil end
-		if not t.Character or not t.Character.Parent then return nil end
-		if not t.RootPart or not t.RootPart.Parent then return nil end
-		local hp = t.Humanoid and t.Humanoid.Health or t.Health
-		if type(hp) == 'number' and hp <= 0 then return nil end
-		if (t.RootPart.Position - originPos).Magnitude > Range.Value then return nil end
-		local _, visible = gameCamera:WorldToViewportPoint(t.RootPart.Position)
-		if not visible then return nil end
-		return t
-	end
-
-	local function shouldPAWork()
-		if not DesirePAWorkMode then return true end
-		local inFirstPerson = isFirstPerson()
-		if DesirePAWorkMode.Value == 'First Person' then return inFirstPerson
-		elseif DesirePAWorkMode.Value == 'Third Person' then return not inFirstPerson
-		end
-		return true
-	end
-
-	local function isBlacklisted(projectileName)
-		if not OtherProjectiles or not OtherProjectiles.Enabled then
-			local isTurret = projectileName:find('turret') ~= nil or projectileName:find('vulcan') ~= nil
-			return not projectileName:find('arrow') and not isTurret and not projectileName:find('owl')
-		end
-		for _, black in ipairs(Blacklist and Blacklist.ListEnabled or {}) do
-			if projectileName:find(black) then
-				return true
-			end
-		end
-		return false
-	end
-
-	local function pickRandomPart(character)
-		local roll = math.random(1, 100)
-		local headChance = RandomHeadPercent.Value
-		local torsoChance = RandomTorsoPercent.Value
-		if roll <= headChance then
-			return character:FindFirstChild('Head') or character:FindFirstChild('HumanoidRootPart')
-		elseif roll <= headChance + torsoChance then
-			return character:FindFirstChild('UpperTorso') or character:FindFirstChild('HumanoidRootPart')
-		else
-			return character:FindFirstChild('HumanoidRootPart')
-		end
-	end
-
-	local function getClosestPart(character, mousePos)
-		local parts = {
-			'HumanoidRootPart', 'Head', 'LeftHand', 'RightHand',
-			'LeftLowerArm', 'RightLowerArm', 'LeftUpperArm', 'RightUpperArm',
-			'LeftFoot', 'RightFoot', 'LeftLowerLeg', 'RightLowerLeg',
-			'LeftUpperLeg', 'RightUpperLeg', 'LowerTorso', 'UpperTorso'
-		}
-		local camera = gameCamera
-		local rayOrigin = camera.CFrame.Position
-		local rayDir = camera:ScreenPointToRay(mousePos.X, mousePos.Y, 0).Direction
-		local bestAngle = math.huge
-		local bestPart = nil
-
-		for _, partName in ipairs(parts) do
-			local part = character:FindFirstChild(partName)
-			if part then
-				local dirToPart = (part.Position - rayOrigin).Unit
-				local angle = math.acos(math_clamp(rayDir:Dot(dirToPart), -1, 1))
-				if angle < bestAngle then
-					bestAngle = angle
-					bestPart = part
+		local Limbs = TargetLimbs[Mode]
+		if Limbs and Ent.Character then
+			for _, v in Limbs do
+				local Part = Ent.Character:FindFirstChild(v)
+				if Part then
+					return Part
 				end
 			end
 		end
-		return bestPart or character:FindFirstChild('HumanoidRootPart')
+
+		return Ent.RootPart
+	end
+
+	local function GetMouseOrigin()
+		if inputService.TouchEnabled then
+			return gameCamera.ViewportSize / 2
+		end
+		return inputService:GetMouseLocation()
 	end
 
 	ProjectileAimbot = vape.Categories.Blatant:CreateModule({
 		Name = 'ProjectileAimbot',
 		Function = function(callback)
-			if callback then
-				if SilentAim and SilentAim.Enabled then
-					SilentAim:Toggle(false)
-					notif('ProjectileAimbot', 'turned off SilentAim, they cant both run at once gng', 4)
+			if not callback then
+				if Hook and bedwars.ProjectileController.calculateImportantLaunchValues == Hook then
+					bedwars.ProjectileController.calculateImportantLaunchValues = Old
+					Old, Hook = nil, nil
 				end
-				if PAFOVCircle then
-					runPAFOVCircle(PAFOVCircle.Enabled)
+				if CircleObject then
+					CircleObject.Visible = false
 				end
-				ProjectileAimbot:Clean(watchTargets())
-				if DesirePAHideCursor and DesirePAHideCursor.Enabled and not cursorRenderConnection then
-					cursorRenderConnection = runService.RenderStepped:Connect(function()
-						checkGUIState()
-						updateCursor()
-					end)
-					ProjectileAimbot:Clean(cursorRenderConnection)
+				return
+			end
+
+			if SilentAim and SilentAim.Enabled then
+				SilentAim:Toggle(false)
+				notif('ProjectileAimbot', 'turned off SilentAim, they cant both run at once gng', 4)
+			end
+
+			if CircleObject then
+				CircleObject.Visible = true
+			end
+
+			local function UpdateCircle()
+				if CircleObject then
+					CircleObject.Position = GetMouseOrigin()
+				end
+			end
+
+			ProjectileAimbot:Clean(runService.RenderStepped:Connect(UpdateCircle))
+			ProjectileAimbot:Clean(gameCamera:GetPropertyChangedSignal('ViewportSize'):Connect(function()
+				UpdateCircle()
+			end))
+
+			if Hook then
+				return
+			end
+
+			local function AimLaunchValues(self, LaunchData, WorldMeta, Origin, ShootPosition)
+				local LaunchPosition = ShootPosition or self:getLaunchPosition(Origin)
+				if not LaunchPosition then
+					return
 				end
 
-				old = bedwars.ProjectileController.calculateImportantLaunchValues
-				bedwars.ProjectileController.calculateImportantLaunchValues = function(...)
-					local self, projmeta, worldmeta, origin, shootpos = ...
-					local originPos = entitylib.isAlive and (shootpos or (entitylib.character and entitylib.character.RootPart and entitylib.character.RootPart.Position)) or Vector3.zero
-					if not originPos then return old(...) end
+				local ProjectileName = tostring(LaunchData.projectile or '')
+				if ProjectileName:find('splash_potion', 1, true) then
+					if not Potions.Enabled then
+						return
+					end
+				elseif not OtherProjectiles.Enabled and not ProjectileName:find('arrow', 1, true) and not (UseUmeko.Enabled and ProjectileName:find('^ninja_chakram')) then
+					return
+				end
 
-					local plr = entitylib.EntityMouse({
-						Part = 'RootPart',
-						Range = FOV.Value,
-						Players = Targets.Players.Enabled,
-						NPCs = (Targets.NPCs and Targets.NPCs.Enabled) or false,
-						Wallcheck = Targets.Walls.Enabled,
-						Sort = sortmethods[SortMethod.Value or 'Cursor'],
-						Origin = originPos
-					})
-					if plr and plr ~= paLockedTarget then
-						paLeadStart = tick()
-					end
-					if plr then
-						paLockedTarget = plr
-						paLockTime = tick()
-					end
+				local BlacklistName = (ProjectileName == 'glue_trap' or ProjectileName == 'glue_projectile') and 'gloop' or ProjectileName
+				if table.find(Blacklist.ListEnabled or {}, BlacklistName) then
+					return
+				end
 
-					if not plr then
-						paLockedTarget = nil
-						paLeadStart = 0
-						wasHovering = false
-						return old(...)
-					end
-					
-					if not shouldPAWork() then
-						wasHovering = false
-						return old(...)
+				local ProjectileMeta = LaunchData:getProjectileMeta()
+				local Lifetime = WorldMeta and (ProjectileMeta.predictionLifetimeSec or ProjectileMeta.lifetimeSec or 3) or (ProjectileMeta.lifetimeSec or 3)
+				local Gravity = (ProjectileMeta.gravitationalAcceleration or 196.2) * (LaunchData.gravityMultiplier or 1)
+				local ProjectileSpeed = (ProjectileMeta.launchVelocity or 100) * ((AutoCharge.Enabled or not Aim.Enabled) and 1 or (LaunchData.velocityMultiplier or 1))
+				local OffsetPosition = LaunchPosition + (ProjectileName == 'owl_projectile' and Vector3.zero or (LaunchData.fromPositionOffset or Vector3.zero))
+				local Tool = store.hand and store.hand.tool
+				local PartName = PartOption.Value == 'Dynamic' and (IsHeadshotProjectile(Tool and Tool.Name) and 'Head' or 'RootPart') or PartOption.Value
+				local Filtered = false
+
+				local function GetLaunchValues(Ent)
+					if not Ent.Character or not Ent.RootPart then
+						return nil
 					end
 
-					local targetBodyPart = nil
-					if TargetPart.Value == 'Dynamic' then
-						local tool = (typeof(origin) == 'Instance' and origin) or (store.hand and store.hand.tool)
-						local itemType = tostring(tool and tool.Name or ""):lower()
-						local isHH = itemType:find("headhunter") or tostring(projmeta.projectile or ""):find("headhunter")
-						targetBodyPart = (isHH and plr.Character and plr.Character:FindFirstChild("Head")) or plr.RootPart
-					elseif TargetPart.Value == 'RootPart' then
-						targetBodyPart = plr.RootPart
-					elseif TargetPart.Value == 'Head' then
-						targetBodyPart = (plr.Character and plr.Character:FindFirstChild('Head')) or plr.RootPart
-					elseif TargetPart.Value == 'Closest' then
-						local mousePos = inputService.TouchEnabled and (gameCamera.ViewportSize / 2) or inputService:GetMouseLocation()
-						targetBodyPart = plr.Character and getClosestPart(plr.Character, mousePos) or plr.RootPart
-					elseif TargetPart.Value == 'Randomize' then
-						if lockedRandomPart and lockedRandomPart.Parent ~= plr.Character then
-							lockedRandomPart = nil
-						end
-						if plr.Character and (not lockedRandomPart or not lockedRandomPart.Parent) then
-							lockedRandomPart = pickRandomPart(plr.Character)
-						end
-						targetBodyPart = lockedRandomPart or plr.RootPart
-					else
-						targetBodyPart = plr.RootPart
-					end
-					if not targetBodyPart then
-						wasHovering = false
-						return old(...)
-					end
-					local dist = (targetBodyPart.Position - originPos).Magnitude
-					if dist > Range.Value then
-						wasHovering = false
-						return old(...)
-					end
-					local pos = shootpos or self:getLaunchPosition(origin)
-					if not pos then
-						wasHovering = false
-						return old(...)
-					end
-					local projectileName = projmeta.projectile or ""
-					if isBlacklisted(projectileName) then
-						wasHovering = false
-						return old(...)
-					end
-					refreshRayCheck()
-					local meta = projmeta:getProjectileMeta()
-					local overrides
+					local Balloons = Ent.Character:GetAttribute('InflatedBalloons')
+					local PlayerGravity = workspace.Gravity
 
-					if meta.getProjectileOverridesFunction then
-						pcall(function()
-							overrides = meta.getProjectileOverridesFunction(lplr)
-						end)
+					if Balloons and Balloons > 0 then
+						PlayerGravity = balloonGravity(Balloons, Ent.Character)
 					end
 
-					overrides = type(overrides) == 'table' and overrides or {}
-
-					local predictionLifetime = tonumber(overrides.predictionLifetimeOverride) or tonumber(meta.predictionLifetimeSec)
-					local normalLifetime = tonumber(overrides.lifetimeOverride) or tonumber(meta.lifetimeSec) or 3
-					local lifetime = worldmeta and (predictionLifetime or normalLifetime) or normalLifetime
-					local gravityMultiplier = tonumber(projmeta.gravityMultiplier) or 1
-					local gravity = (tonumber(meta.gravitationalAcceleration) or 196.2) * gravityMultiplier
-
-					local toolMeta = origin and bedwars.ItemMeta[origin.Name]
-					local sourceMeta = toolMeta and toolMeta.projectileSource
-					local maxDraw = tonumber(sourceMeta and sourceMeta.maxStrengthChargeSec)
-						or tonumber(sourceMeta and sourceMeta.maxDrawDurationSeconds)
-						or (tostring(projmeta.projectile):find('arrow') and 0.65 or 0.8)
-
-					local paMinScalar = tonumber(sourceMeta and sourceMeta.minStrengthScalar) or 1
-					local baseSpeed = tonumber(overrides.launchVelocityOverride) or tonumber(meta.launchVelocity) or 100
-					local nativeValues = old(...)
-					local projSpeed
-					local customDrawDuration
-					local offsetpos
-
-					if nativeValues and typeof(nativeValues.positionFrom) == 'Vector3' then
-						offsetpos = nativeValues.positionFrom
-					else
-						local safeOffset = projmeta.fromPositionOffset
-
-						if typeof(safeOffset) ~= 'Vector3' then
-							safeOffset = Vector3.new(0, 2, 0)
-						end
-
-						offsetpos = pos + safeOffset
+					if Ent.Character.PrimaryPart and Ent.Character.PrimaryPart:FindFirstChild('rbxassetid://8200754399') then
+						PlayerGravity = 6
 					end
 
-					if nativeValues and type(nativeValues.gravitationalAcceleration) == 'number' then
-						gravity = nativeValues.gravitationalAcceleration
-					end
-
-					if AutoCharge.Enabled then
-						local drawPct = math.clamp(skidPAChargePercent.Value / 100, 0, 1)
-
-						projSpeed = baseSpeed * (paMinScalar + (1 - paMinScalar) * drawPct)
-						customDrawDuration = maxDraw * drawPct
-					else
-						if nativeValues
-							and typeof(nativeValues.initialVelocity) == 'Vector3'
-							and nativeValues.initialVelocity.Magnitude > 0 then
-
-							projSpeed = nativeValues.initialVelocity.Magnitude
-						else
-							local liveDraw = tonumber(projmeta.drawDurationSeconds) or 0
-							local livePct = maxDraw > 0 and math.clamp(liveDraw / maxDraw, 0, 1) or 0
-
-							projSpeed = baseSpeed * (paMinScalar + (1 - paMinScalar) * livePct)
-						end
-
-						customDrawDuration = nativeValues
-							and tonumber(nativeValues.drawDurationSeconds)
-							or tonumber(projmeta.drawDurationSeconds)
-							or 0
-					end
-					local balloons = plr.Character and plr.Character:GetAttribute('InflatedBalloons')
-					local playerGravity = workspace.Gravity
-					if balloons and balloons > 0 then
-						playerGravity = balloonGravity(balloons, plr.Character)
-					end
-					if plr.Character and plr.Character.PrimaryPart and plr.Character.PrimaryPart:FindFirstChild('rbxassetid://8200754399') then
-						playerGravity = 6
-					end
-					if plr.Player and plr.Player:GetAttribute('IsOwlTarget') then
-						for _, owl in ipairs(collectionService:GetTagged('Owl')) do
-							if owl:GetAttribute('Target') == plr.Player.UserId and owl:GetAttribute('Status') == 2 then
-								playerGravity = 0
+					if Ent.Player and Ent.Player:GetAttribute('IsOwlTarget') then
+						for _, v in collectionService:GetTagged('Owl') do
+							if v:GetAttribute('Target') == Ent.Player.UserId and v:GetAttribute('Status') == 2 then
+								PlayerGravity = 0
 								break
 							end
 						end
 					end
-					local rawVel = plr.RootPart.AssemblyLinearVelocity or plr.RootPart.Velocity or Vector3.zero
-					local aimTarget = targetBodyPart.Position
-					if tostring(projmeta.projectile):find('fireball') then
-						aimTarget = splashAimPoint(plr.RootPart, plr.HipHeight) or aimTarget
-					end
-					local solverVelocity = projmeta.projectile == 'telepearl' and Vector3.zero or rawVel
-					local tAirborne = (plr.Humanoid and plr.Humanoid.FloorMaterial == Enum.Material.Air) or math.abs(rawVel.Y) > 0.01
-					local tJump = plr.Jumping and 42.6 or nil
-					local horizLead = 1
-					local vertLead = 1
-					if CustomPredictions and CustomPredictions.Enabled and projmeta.projectile ~= 'telepearl' then
-						horizLead = PredictHorizontal.Value / 100
-						vertLead = PredictVertical.Value / 100
-					end
-					if horizLead ~= 1 or vertLead ~= 1 then
-						solverVelocity = Vector3.new(
-							solverVelocity.X * horizLead,
-							solverVelocity.Y * vertLead,
-							solverVelocity.Z * horizLead
-						)
-					end
 
-					local leadAlpha = nil
-					local launchOrigin = offsetpos
-					local solveOrigin = offsetpos
-					local calc, _, flightTime = prediction.SolveTrajectory(
-						solveOrigin, projSpeed, gravity,
-						aimTarget,
-						solverVelocity,
-						playerGravity, plr.HipHeight,
-						tJump,
-						rayCheck,
-						tAirborne,
-						plr.RootPart.Position,
-						plr.RootPart,
-						nil,
-						true,
-						leadAlpha
+					local AimPart = GetTargetPart(Ent, PartName)
+					local Velocity = ProjectileName == 'telepearl' and Vector3.zero or AimPart.AssemblyLinearVelocity
+					local EntRootVelocity = Ent.RootPart.AssemblyLinearVelocity
+					local Airborne = (Ent.Humanoid and Ent.Humanoid.FloorMaterial == Enum.Material.Air) or math.abs(EntRootVelocity.Y) > 0.01
+					local JumpVelocity = Ent.Jumping and 42.6 or nil
+
+					local AimPosition, _, TravelTime = prediction.SolveTrajectory(
+						OffsetPosition, ProjectileSpeed, Gravity,
+						AimPart.Position, Velocity,
+						PlayerGravity, Ent.HipHeight, JumpVelocity,
+						ArcCheck, Airborne,
+						Ent.RootPart.Position, Ent.RootPart,
+						nil, true
 					)
 
-					if calc then
-						local bow = bedwars.BowConstantsTable or {}
-						local rel = sourceMeta and sourceMeta.relativeOverride
-						local rx, ry, rz = bow.RelX or 0.8, bow.RelY or -0.6, bow.RelZ or 0
-						if type(rel) == 'table' then
-							rx, ry, rz = rel.relX or 0, rel.relY or 0, rel.relZ or 0
+					if AimPosition and TravelTime and (Horizontal.Value ~= 1 or Vertical.Value ~= 1) then
+						local Rise = (Velocity.Y * TravelTime) - (PlayerGravity * TravelTime * TravelTime * 0.5)
+						local Lead = Vector3.new(
+							Velocity.X * TravelTime * (Horizontal.Value - 1),
+							Rise * (Vertical.Value - 1),
+							Velocity.Z * TravelTime * (Horizontal.Value - 1)
+						)
+						local AdjustedPosition, _, AdjustedTime = prediction.SolveTrajectory(
+							OffsetPosition, ProjectileSpeed, Gravity,
+							AimPart.Position + Lead, Velocity,
+							PlayerGravity, Ent.HipHeight, JumpVelocity,
+							ArcCheck, Airborne,
+							Ent.RootPart.Position, Ent.RootPart,
+							nil, true
+						)
+						if AdjustedPosition then
+							AimPosition, TravelTime = AdjustedPosition, AdjustedTime or TravelTime
 						end
-						local function aimFrom(offset)
-							local point = aimTarget + (typeof(offset) == 'Vector3' and offset or Vector3.new(0, offset, 0))
-							local c1, _, f1 = prediction.SolveTrajectory(solveOrigin, projSpeed, gravity, point, solverVelocity, playerGravity, plr.HipHeight, tJump, rayCheck, tAirborne, plr.RootPart.Position, plr.RootPart, nil, true, leadAlpha)
-							if not c1 then return nil end
-							local s1 = prediction.GetSpawnPosition(solveOrigin, c1, rx, ry, rz)
-							local c2, _, f2 = prediction.SolveTrajectory(s1, projSpeed, gravity, point, solverVelocity, playerGravity, plr.HipHeight, tJump, rayCheck, tAirborne, plr.RootPart.Position, plr.RootPart, nil, true, leadAlpha)
-							if c2 and f2 then
-								c1 = solveOrigin + (c2 - s1)
-								f1 = f2
-								s1 = prediction.GetSpawnPosition(solveOrigin, c1, rx, ry, rz)
-							end
-							return c1, f1, s1
-						end
-						local c0, f0, s0 = aimFrom(0)
-						if c0 and f0 then
-							calc, flightTime = c0, f0
-							if not worldmeta and not prediction.IsTrajectoryClear(s0, (c0 - solveOrigin).Unit * projSpeed, gravity, f0 * 0.97, rayCheck) then
-								local los = (aimTarget - solveOrigin) * Vector3.new(1, 0, 1)
-								local side = los.Magnitude > 0.01 and Vector3.new(-los.Z, 0, los.X).Unit or Vector3.new(1, 0, 0)
-								local up = Vector3.new(0, 1, 0)
-								for _, offset in {up * 0.8, up * -0.8, side * 0.9, side * -0.9, up * 1.6, up * -1.6, side * 0.9 + up * 1.2, side * -0.9 + up * 1.2, up * 2.1, up * -2.4, side * 0.9 - up * 1.2, side * -0.9 - up * 1.2} do
-									local c3, f3, s3 = aimFrom(offset)
-									if c3 and f3 and prediction.IsTrajectoryClear(s3, (c3 - solveOrigin).Unit * projSpeed, gravity, f3 * 0.97, rayCheck) then
-										calc, flightTime = c3, f3
-										break
-									end
+					end
+
+					if not AimPosition or not TravelTime or TravelTime > Lifetime then
+						return nil
+					end
+
+					local LaunchVelocity = (AimPosition - OffsetPosition).Unit * ProjectileSpeed
+
+					if Targets.Walls.Enabled and TravelTime then
+						if not Filtered then
+							local IgnoreList = {gameCamera, lplr.Character}
+							for _, v in entitylib.List do
+								if v.Character then
+									table.insert(IgnoreList, v.Character)
 								end
 							end
-						end
-					end
-					local returnDist = tonumber(overrides.returnDistanceOverride) or tonumber(meta.returnDistance)
-					if calc and flightTime and flightTime <= lifetime and (not returnDist or projSpeed * flightTime <= returnDist - 2) then
-						paLockedTarget = plr
-						paLockTime = tick()
-
-						if targetinfo and targetinfo.Targets then
-							targetinfo.Targets[plr] = tick() + 1
+							ArcCheck.FilterDescendantsInstances = IgnoreList
+							Filtered = true
 						end
 
-						wasHovering = false
-						return {
-							initialVelocity = CFrame.lookAt(solveOrigin, calc).LookVector * projSpeed,
-							positionFrom = launchOrigin,
-							deltaT = lifetime,
-							gravitationalAcceleration = gravity,
-							drawDurationSeconds = customDrawDuration
-						}
+						if not prediction.IsTrajectoryClear(OffsetPosition, LaunchVelocity, Gravity, TravelTime, ArcCheck) then
+							return nil
+						end
 					end
-					wasHovering = false
-					return old(...)
+
+					return {
+						initialVelocity = LaunchVelocity,
+						positionFrom = OffsetPosition,
+						deltaT = Lifetime,
+						gravitationalAcceleration = Gravity,
+						drawDurationSeconds = AutoCharge.Enabled and 5 or LaunchData.drawDurationSeconds
+					}
 				end
-			else
-				if old then
-					bedwars.ProjectileController.calculateImportantLaunchValues = old
+
+				local Values, Attempts, Started = nil, 0, os.clock()
+				local Ent = entitylib.EntityMouse({
+					Part = 'RootPart',
+					Range = FOV.Value,
+					Players = Targets.Players.Enabled,
+					NPCs = Targets.NPCs and Targets.NPCs.Enabled or false,
+					Origin = entitylib.isAlive and (ShootPosition or entitylib.character.RootPart.Position) or Vector3.zero,
+					MouseOrigin = GetMouseOrigin(),
+					Sort = sortmethods[Sort.Value],
+					Check = function(Candidate)
+						if MiloCheck.Enabled and IsDisguised(Candidate) then
+							return false
+						end
+						if (Candidate.RootPart.Position - entitylib.character.RootPart.Position).Magnitude > Distance.Value then
+							return false
+						end
+						if Attempts >= 10 or (Attempts > 0 and (os.clock() - Started) > 0.0015) then
+							return false
+						end
+						Attempts += 1
+						Values = GetLaunchValues(Candidate)
+						return Values ~= nil
+					end
+				})
+
+				if Ent and Values then
+					if targetinfo and targetinfo.Targets then
+						targetinfo.Targets[Ent] = tick() + 1
+					end
+					return Values
 				end
-				paLockedTarget = nil
-				paLeadStart = 0
-				wasHovering = false
-				lockedRandomPart = nil
-				table.clear(_paVelHistory)
-				if cursorRenderConnection then
-					cursorRenderConnection:Disconnect()
-					cursorRenderConnection = nil
-				end
-				runPAFOVCircle(false)
-				pcall(function() inputService.MouseIconEnabled = true end)
-				task.defer(function()
-					pcall(function() inputService.MouseIconEnabled = true end)
-					pcall(function() game:GetService('UserInputService').MouseIconEnabled = true end)
-				end)
 			end
+
+			Old = bedwars.ProjectileController.calculateImportantLaunchValues
+			Hook = function(self, LaunchData, WorldMeta, Origin, ShootPosition, ...)
+				if ProjectileAimbot.Enabled then
+					local Success, Values = pcall(AimLaunchValues, self, LaunchData, WorldMeta, Origin, ShootPosition)
+					if Success and Values then
+						return Values
+					end
+				end
+
+				return Old(self, LaunchData, WorldMeta, Origin, ShootPosition, ...)
+			end
+			bedwars.ProjectileController.calculateImportantLaunchValues = Hook
 		end,
-		Tooltip = 'helps your shitty ass aim'
+		Tooltip = 'Silently adjusts your aim towards the enemy'
 	})
 
 	Targets = ProjectileAimbot:CreateTargets({
 		Players = true,
-		NPCs = true,
 		Walls = true
 	})
 
-	TargetPart = ProjectileAimbot:CreateDropdown({
+	Sort = ProjectileAimbot:CreateDropdown({
+		Name = 'Target mode',
+		List = getSortList({'Distance'}),
+		Default = 'Distance'
+	})
+
+	PartOption = ProjectileAimbot:CreateDropdown({
 		Name = 'Part',
-		List = {'Dynamic', 'RootPart', 'Head', 'Closest', 'Randomize'},
+		List = {'RootPart', 'Head', 'Torso', 'Left arm', 'Right arm', 'Left leg', 'Right leg', 'Random', 'Dynamic'},
 		Default = 'RootPart',
-		Function = function()
-			lockedRandomPart = nil
-			wasHovering = false
-		end
-	})
-
-	SortMethod = ProjectileAimbot:CreateDropdown({
-		Name = 'Sort Method',
-		List = getSortList({'Distance', 'Damage', 'Cursor'}),
-		Default = 'Cursor',
-	})
-
-	DesirePAWorkMode = ProjectileAimbot:CreateDropdown({
-		Name = 'PA Work Mode',
-		List = {'First Person', 'Third Person', 'Both'},
-		Default = 'Both',
-	})
-
-	Range = ProjectileAimbot:CreateSlider({
-		Name = 'Range',
-		Min = 10,
-		Max = 500,
-		Default = 100,
+		Tooltip = 'Dynamic aims at the head with headshot-capable bows, including tactical bows and Archer, and at the body with everything else'
 	})
 
 	FOV = ProjectileAimbot:CreateSlider({
 		Name = 'FOV',
 		Min = 1,
 		Max = 1000,
-		Default = 300,
-	})
-
-	PAFOVCircle = ProjectileAimbot:CreateToggle({
-		Name = 'FOV Circle',
-		Function = function(call)
-			runPAFOVCircle(call)
+		Default = 1000,
+		Function = function(Val)
+			if CircleObject then
+				CircleObject.Radius = Val
+			end
 		end
 	})
 
-	RandomHeadPercent = ProjectileAimbot:CreateSlider({
-		Name = 'Head Chance',
-		Min = 0,
-		Max = 100,
-		Default = 50,
+	Distance = ProjectileAimbot:CreateSlider({
+		Name = 'Distance',
+		Min = 1,
+		Max = 1000,
+		Default = 1000,
+		Suffix = 'studs',
+		Tooltip = 'Maximum enemy distance from you'
+	})
+
+	ProjectileAimbot:CreateToggle({
+		Name = 'Range Circle',
+		Function = function(Callback)
+			if Callback then
+				local ok, circle = pcall(function()
+					if not Drawing then return nil end
+					return Drawing.new('Circle')
+				end)
+				if ok and circle then
+					CircleObject = circle
+					CircleObject.Filled = CircleFilled.Enabled
+					CircleObject.Color = Color3.fromHSV(CircleColor.Hue, CircleColor.Sat, CircleColor.Value)
+					CircleObject.Position = GetMouseOrigin()
+					CircleObject.Radius = FOV.Value
+					CircleObject.NumSides = 100
+					CircleObject.Thickness = CircleThickness.Value
+					CircleObject.Transparency = 1 - CircleTransparency.Value
+					CircleObject.Visible = ProjectileAimbot.Enabled
+				end
+			elseif CircleObject then
+				pcall(function()
+					CircleObject.Visible = false
+					CircleObject:Remove()
+				end)
+				CircleObject = nil
+			end
+
+			CircleColor.Object.Visible = Callback
+			CircleTransparency.Object.Visible = Callback
+			CircleThickness.Object.Visible = Callback
+			CircleFilled.Object.Visible = Callback
+		end
+	})
+
+	CircleColor = ProjectileAimbot:CreateColorSlider({
+		Name = 'Circle Color',
+		Function = function(Hue, Sat, Val)
+			if CircleObject then
+				CircleObject.Color = Color3.fromHSV(Hue, Sat, Val)
+			end
+		end,
 		Darker = true,
 		Visible = false
 	})
 
-	RandomTorsoPercent = ProjectileAimbot:CreateSlider({
-		Name = 'Torso Chance',
+	CircleTransparency = ProjectileAimbot:CreateSlider({
+		Name = 'Transparency',
 		Min = 0,
-		Max = 100,
-		Default = 50,
-		Darker = true,
-		Visible = false,
-		Function = function(val)
-			if RandomHeadPercent and (RandomHeadPercent.Value + val) > 100 then
-				notif('ProjectileAimbot', 'head or torso chance is more than 100% so root part will never be picked..', 3)
+		Max = 1,
+		Decimal = 10,
+		Default = 0.5,
+		Function = function(Val)
+			if CircleObject then
+				CircleObject.Transparency = 1 - Val
 			end
-		end
+		end,
+		Darker = true,
+		Visible = false
 	})
 
-	local function updateRandomizeVisibility()
-		local vis = (TargetPart.Value == 'Randomize')
-		RandomHeadPercent.Object.Visible = vis
-		RandomTorsoPercent.Object.Visible = vis
-	end
-	if TargetPart.AddHook then
-		TargetPart:AddHook(updateRandomizeVisibility)
-	end
-	updateRandomizeVisibility()
-
-	DesirePAHideCursor = ProjectileAimbot:CreateToggle({
-		Name = 'Hide Cursor',
-		Default = false,
-		Tooltip = 'Hides the cursor while aiming',
-		Function = function(callback)
-			if DesirePACursorViewMode then DesirePACursorViewMode.Object.Visible = callback end
-			if DesirePACursorLimitBow then DesirePACursorLimitBow.Object.Visible = callback end
-			if DesirePACursorShowGUI then DesirePACursorShowGUI.Object.Visible = callback end
-			if callback and ProjectileAimbot.Enabled then
-				if not cursorRenderConnection then
-					cursorRenderConnection = runService.RenderStepped:Connect(function()
-						checkGUIState()
-						updateCursor()
-					end)
-				end
-				updateCursor()
-			else
-				if cursorRenderConnection then
-					cursorRenderConnection:Disconnect()
-					cursorRenderConnection = nil
-				end
-				pcall(function() inputService.MouseIconEnabled = true end)
-				task.defer(function()
-					pcall(function() inputService.MouseIconEnabled = true end)
-					pcall(function() game:GetService('UserInputService').MouseIconEnabled = true end)
-				end)
+	CircleThickness = ProjectileAimbot:CreateSlider({
+		Name = 'Thickness',
+		Min = 1,
+		Max = 10,
+		Decimal = 10,
+		Default = 1,
+		Function = function(Val)
+			if CircleObject then
+				CircleObject.Thickness = Val
 			end
-		end
-	})
-
-	DesirePACursorViewMode = ProjectileAimbot:CreateDropdown({
-		Name = 'Cursor View Mode',
-		List = {'First Person', 'Third Person', 'Both'},
-		Default = 'First Person',
+		end,
 		Darker = true,
 		Visible = false,
-		Function = function()
-			if ProjectileAimbot.Enabled and DesirePAHideCursor.Enabled then
-				updateCursor()
-			end
-		end
+		Tooltip = "How wide the circle's outline is, has no effect while Circle Filled is on"
 	})
 
-	DesirePACursorLimitBow = ProjectileAimbot:CreateToggle({
-		Name = 'Limit to Bow',
-		Darker = true,
-		Visible = false,
-		Function = function()
-			if ProjectileAimbot.Enabled and DesirePAHideCursor.Enabled then
-				updateCursor()
+	CircleFilled = ProjectileAimbot:CreateToggle({
+		Name = 'Circle Filled',
+		Function = function(Callback)
+			if CircleObject then
+				CircleObject.Filled = Callback
 			end
-		end
+		end,
+		Darker = true,
+		Visible = false
 	})
 
-	DesirePACursorShowGUI = ProjectileAimbot:CreateToggle({
-		Name = 'Show on GUI',
-		Darker = true,
-		Visible = false,
-		Function = function()
-			if ProjectileAimbot.Enabled and DesirePAHideCursor.Enabled then
-				updateCursor()
+	Horizontal = ProjectileAimbot:CreateSlider({
+		Name = 'Horizontal prediction',
+		Min = 0,
+		Max = 2,
+		Default = 1,
+		Decimal = 100,
+		Tooltip = 'Scales how far ahead of the target you aim sideways'
+	})
+
+	Vertical = ProjectileAimbot:CreateSlider({
+		Name = 'Vertical prediction',
+		Min = 0,
+		Max = 2,
+		Default = 1,
+		Decimal = 100,
+		Tooltip = 'Scales how far ahead of the target you aim while it rises or falls'
+	})
+
+	AutoCharge = ProjectileAimbot:CreateToggle({
+		Name = 'Auto Charge',
+		Function = function(Callback)
+			if Aim and Aim.Object then
+				Aim.Object.Visible = Callback
 			end
-		end
+		end,
+		Default = true,
+		Tooltip = 'Fully charges your bow, Allowing your projectile to deal more damage'
+	})
+
+	Aim = ProjectileAimbot:CreateToggle({
+		Name = 'Aim change',
+		Default = true,
+		Darker = true,
+		Tooltip = 'Changes your trajectory to match charge percentage.'
 	})
 
 	OtherProjectiles = ProjectileAimbot:CreateToggle({
 		Name = 'Other Projectiles',
 		Default = true,
-		Function = function(call)
-			if Blacklist then Blacklist.Object.Visible = call end
-		end
+		Tooltip = 'Aims everything that is not an arrow or a splash potion'
+	})
+
+	UseUmeko = ProjectileAimbot:CreateToggle({
+		Name = 'Use umeko',
+		Tooltip = "Aims umeko's chakram even with Other Projectiles off"
+	})
+
+	Potions = ProjectileAimbot:CreateToggle({
+		Name = 'Shoot pots',
+		Default = true,
+		Tooltip = 'Aims heal, poison and sleep splash potions, separate from Other Projectiles'
 	})
 
 	Blacklist = ProjectileAimbot:CreateTextList({
 		Name = 'Blacklist',
-		Darker = true,
-		Default = {'telepearl'},
-		Visible = OtherProjectiles.Enabled
+		Default = {'telepearl'}
 	})
 
-	CustomPredictions = ProjectileAimbot:CreateToggle({
-		Name = 'Custom Predictions',
-		Default = false,
-		Tooltip = 'lets u control how much it leads the target urself',
-		Function = function(callback)
-			if PredictHorizontal then PredictHorizontal.Object.Visible = callback end
-			if PredictVertical then PredictVertical.Object.Visible = callback end
-		end
-	})
-	PredictHorizontal = ProjectileAimbot:CreateSlider({
-		Name = 'Horizontal',
-		Min = 0,
-		Max = 300,
-		Default = 100,
-		Suffix = '%',
-		Darker = true,
-		Visible = false
-	})
-	PredictVertical = ProjectileAimbot:CreateSlider({
-		Name = 'Vertical',
-		Min = 0,
-		Max = 300,
-		Default = 100,
-		Suffix = '%',
-		Darker = true,
-		Visible = false
-	})
-	AutoCharge = ProjectileAimbot:CreateToggle({
-		Name = "AutoCharge",
+	MiloCheck = ProjectileAimbot:CreateToggle({
+		Name = 'Milo check',
 		Default = true,
-		Function = function(v)
-			if skidPAChargePercent and skidPAChargePercent.Object then skidPAChargePercent.Object.Visible = v end
-		end
-	})
-	skidPAChargePercent = ProjectileAimbot:CreateSlider({
-		Name = 'Charge Percent',
-		Min = 1,
-		Max = 100,
-		Default = 100,
+		Tooltip = 'Skips Milo players while they are disguised as a block'
 	})
 end)
 

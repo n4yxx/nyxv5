@@ -262,8 +262,9 @@ if not isfolder('NYX/assets/' .. gui) then
 end
 
 local guiPath = 'NYX/guis/' .. gui .. '.lua'
+local guiBuild = '--NYXBUILD:vape5'
 local guiSource = isfile(guiPath) and readfile(guiPath) or ''
-if type(guiSource) ~= 'string' or not guiSource:find('--NYXBUILD:', 1, true) then
+if type(guiSource) ~= 'string' or not guiSource:find(guiBuild, 1, true) then
 	pcall(delfile, guiPath)
 	guiSource = downloadFile(guiPath, nil, latestCommit or 'main')
 else

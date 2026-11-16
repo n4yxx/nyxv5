@@ -181,6 +181,7 @@ entitylib.EntityMouse = function(entitysettings)
 		end)
 
 		for _, v in sortingTable do
+			if entitysettings.Check and not entitysettings.Check(v.Entity) then continue end
 			if entitysettings.Wallcheck then
 				if entitylib.Wallcheck(entitysettings.Origin, v.Entity[entitysettings.Part].Position, entitysettings.Wallcheck, v.Entity) then continue end
 			end

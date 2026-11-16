@@ -1,4 +1,4 @@
---NYXBUILD:vape4
+--NYXBUILD:vape5
 local mainapi = {
 	Categories = {},
 	GUIColor = {
@@ -7288,38 +7288,39 @@ end
 function mainapi:CreateSearch()
 	local searchbkg = Instance.new('Frame')
 	searchbkg.Name = 'Search'
-	searchbkg.Size = UDim2.fromOffset(220, 37)
-	searchbkg.Position = UDim2.new(0.5, 0, 0, 13)
 	searchbkg.AnchorPoint = Vector2.new(0.5, 0)
+	searchbkg.Position = UDim2.new(0.5, 0, 0, 13)
+	searchbkg.Size = UDim2.fromOffset(220, 37)
 	searchbkg.BackgroundColor3 = color.Dark(uipallet.Main, 0.02)
 	searchbkg.Parent = clickgui
+	addBlur(searchbkg)
+	addCorner(searchbkg)
 	local searchicon = Instance.new('ImageLabel')
 	searchicon.Name = 'Icon'
 	searchicon.Size = UDim2.fromOffset(14, 14)
-	searchicon.Position = UDim2.new(1, -23, 0, 11)
+	searchicon.Position = UDim2.new(1, -25, 0, 11)
 	searchicon.BackgroundTransparency = 1
 	searchicon.Image = getcustomasset('NYX/assets/new/search.png')
 	searchicon.ImageColor3 = color.Light(uipallet.Main, 0.37)
-	searchicon.Parent = searchbkg
-	addBlur(searchbkg)
-	addCorner(searchbkg)
-	local search = Instance.new('TextBox')
-	search.Size = UDim2.new(1, -10, 0, 37)
-	search.Position = UDim2.fromOffset(10, 0)
-	search.BackgroundTransparency = 1
-	search.Text = ''
-	search.PlaceholderText = 'Search modules...'
-	search.PlaceholderColor3 = color.Dark(uipallet.Text, 0.35)
-	search.TextXAlignment = Enum.TextXAlignment.Left
-	search.TextColor3 = uipallet.Text
-	search.TextSize = 12
-	search.FontFace = uipallet.Font
-	search.ClearTextOnFocus = false
-	search.Parent = searchbkg
 	searchicon.Active = true
+	searchicon.Parent = searchbkg
+	local searchbox = Instance.new('TextBox')
+	searchbox.Name = 'SearchBox'
+	searchbox.BackgroundTransparency = 1
+	searchbox.ClearTextOnFocus = false
+	searchbox.FontFace = uipallet.Font
+	searchbox.Position = UDim2.fromOffset(10, 0)
+	searchbox.Size = UDim2.new(1, -38, 0, 37)
+	searchbox.PlaceholderText = 'Search modules...'
+	searchbox.PlaceholderColor3 = color.Dark(uipallet.Text, 0.35)
+	searchbox.Text = ''
+	searchbox.TextColor3 = uipallet.Text
+	searchbox.TextSize = 12
+	searchbox.TextXAlignment = Enum.TextXAlignment.Left
+	searchbox.Parent = searchbkg
 	searchicon.InputBegan:Connect(function(input)
 		if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-			search:CaptureFocus()
+			searchbox:CaptureFocus()
 		end
 	end)
 	local children = Instance.new('ScrollingFrame')
@@ -7328,9 +7329,9 @@ function mainapi:CreateSearch()
 	children.Position = UDim2.fromOffset(0, 34)
 	children.BackgroundTransparency = 1
 	children.BorderSizePixel = 0
+	children.CanvasSize = UDim2.new()
 	children.ScrollBarThickness = 2
 	children.ScrollBarImageTransparency = 0.75
-	children.CanvasSize = UDim2.new()
 	children.Parent = searchbkg
 	local divider = Instance.new('Frame')
 	divider.Name = 'Divider'
@@ -7342,213 +7343,129 @@ function mainapi:CreateSearch()
 	divider.Visible = false
 	divider.Parent = searchbkg
 	local windowlist = Instance.new('UIListLayout')
-	windowlist.SortOrder = Enum.SortOrder.LayoutOrder
 	windowlist.HorizontalAlignment = Enum.HorizontalAlignment.Center
+	windowlist.SortOrder = Enum.SortOrder.LayoutOrder
 	windowlist.Parent = children
+
+	local function refreshLayout()
+		local contentY = windowlist.AbsoluteContentSize.Y / math.max(scale.Scale, 0.01)
+		children.CanvasSize = UDim2.fromOffset(0, contentY)
+		searchbkg.Size = UDim2.fromOffset(220, math.min(37 + contentY, 437))
+	end
+
+	local function listenProperty(source, target, property, holder)
+		local function apply()
+			local ok, value = pcall(function() return source[property] end)
+			if ok then pcall(function() target[property] = value end) end
+		end
+		apply()
+		local connection = source:GetPropertyChangedSignal(property):Connect(apply)
+		holder.Destroying:Connect(function()
+			connection:Disconnect()
+		end)
+	end
 
 	children:GetPropertyChangedSignal('CanvasPosition'):Connect(function()
 		divider.Visible = children.CanvasPosition.Y > 10 and children.Visible
 	end)
-	search:GetPropertyChangedSignal('Text'):Connect(function()
-		for _, v in children:GetChildren() do
-			if v:IsA('TextButton') or v.Name == 'NoResults' then
-				v:Destroy()
+
+	searchbox:GetPropertyChangedSignal('Text'):Connect(function()
+		for _, object in children:GetChildren() do
+			if object:IsA('TextButton') or object.Name == 'NoResults' then
+				object:Destroy()
 			end
 		end
-		if search.Text == '' then
-			searchbkg.Size = UDim2.fromOffset(220, 37)
-			children.CanvasSize = UDim2.new()
+
+		local query = searchbox.Text:lower()
+		if query == '' then
+			refreshLayout()
 			return
 		end
 
-		local lowerSearch = search.Text:lower()
-		local query = lowerSearch:gsub('[%s_%-]', '')
-		local function matchesKeyword(text)
-			if query == '' then return false end
-			return tostring(text):lower():gsub('[%s_%-]', ''):find(query, 1, true) ~= nil
+		local matches = {}
+		for name in mainapi.Modules do
+			if tostring(name):lower():find(query, 1, true) then
+				table.insert(matches, name)
+			end
 		end
-		local added = {}
-			
-		local orderCounter = 0
-		for i, v in self.Modules do
-			if not v then continue end
-			pcall(function()
-			local matchType, matchKeyword
 
-			if matchesKeyword(i) then
-				matchType = 'name'
+		table.sort(matches, function(a, b)
+			local startsA = tostring(a):lower():sub(1, #query) == query
+			local startsB = tostring(b):lower():sub(1, #query) == query
+			if startsA ~= startsB then
+				return startsA
 			end
+			return a < b
+		end)
 
-			if not matchType and self.ModuleAliases and self.ModuleAliases[i] then
-				for _, alias in ipairs(self.ModuleAliases[i]) do
-					if matchesKeyword(alias) then
-						matchType = 'alias'
-						matchKeyword = alias
-						break
+		for order, name in matches do
+			local module = mainapi.Modules[name]
+			if module and module.Object then
+				pcall(function()
+					local button = module.Object:Clone()
+					for _, childName in {'Bind', 'Cover', 'Favorite'} do
+						local child = button:FindFirstChild(childName)
+						if child then child:Destroy() end
 					end
-				end
-			end
+					button.LayoutOrder = order * 2
 
-			if not matchType and self.ModuleTags and self.ModuleTags[i] then
-				for _, tag in ipairs(self.ModuleTags[i]) do
-					if matchesKeyword(tag) then
-						matchType = 'tag'
-						matchKeyword = tag
-						break
+					local homeParent, homeOrder
+					if module.Children then
+						homeParent = module.Children.Parent
+						homeOrder = module.Children.LayoutOrder
 					end
-				end
-			end
 
-			if not matchType and v.Options then
-				for optName in v.Options do
-					if matchesKeyword(optName) then
-						matchType = 'option'
-						matchKeyword = optName
-						break
-					end
-				end
-			end
-
-			if matchType and not added[i] then
-				added[i] = true
-				orderCounter = orderCounter + 1
-				local button = v.Object:Clone()
-				button.LayoutOrder = orderCounter * 2
-				if button.Bind then button.Bind:Destroy() end
-				if button.Favorite then button.Favorite:Destroy() end
-
-				button.MouseButton1Click:Connect(function()
-					v:Toggle()
-				end)
-
-				local lastRightClick = 0
-				local homeParent, homeLayoutOrder
-				if v.Children then
-					homeParent = v.Children.Parent
-					homeLayoutOrder = v.Children.LayoutOrder
-				end
-
-				local function restoreChildren()
-					if v.Children and homeParent and homeParent.Parent then
-						pcall(function()
-							v.Children.Parent = homeParent
-							v.Children.LayoutOrder = homeLayoutOrder
-							v.Children.Visible = false
-						end)
-					end
-				end
-
-				button.Destroying:Connect(restoreChildren)
-
-				button.MouseButton2Click:Connect(function()
-					local now = tick()
-					if (now - lastRightClick) < 0.35 then
-						lastRightClick = 0
-						restoreChildren()
-
-						v.Object.Parent.Parent.Visible = true
-						local frame = v.Object.Parent
-						local highlight = Instance.new('Frame')
-						highlight.Size = UDim2.fromScale(1, 1)
-						highlight.BackgroundColor3 = Color3.new(1, 1, 1)
-						highlight.BackgroundTransparency = 0.3
-						highlight.BorderSizePixel = 0
-						highlight.Parent = v.Object
-						tween:Tween(highlight, TweenInfo.new(0.5), {
-							BackgroundTransparency = 1
-						})
-						task.delay(0.5, highlight.Destroy, highlight)
-
-						local cat = mainapi.Categories[v.Category]
-						if cat and not cat.Expanded then
-							task.wait(0.05) 
-							cat:Expand()
-						end
-
-						frame.CanvasPosition = Vector2.new(0, (v.Object.LayoutOrder * 40) - (math.min(frame.CanvasSize.Y.Offset, 600) / 2))
-					else
-						lastRightClick = now
-						if v.Children then
-							v.Children.Parent = button.Parent
-							v.Children.LayoutOrder = button.LayoutOrder + 1
-							v.Children.Visible = not v.Children.Visible
+					local function restoreOptions()
+						if module.Children and homeParent and homeParent.Parent then
+							pcall(function()
+								module.Children.Parent = homeParent
+								module.Children.LayoutOrder = homeOrder
+								module.Children.Visible = false
+							end)
 						end
 					end
-				end)
 
-				if matchType == "name" or matchType == "option" or matchType == "alias" or matchType == "tag" then
-					local displayText
-
-					if matchType == "name" then
-						if i:lower() == lowerSearch then
-							displayText = "MATCHED"
+					local function toggleOptions()
+						if not module.Children then return end
+						if module.Children.Parent == button.Parent then
+							module.Children.Visible = not module.Children.Visible
 						else
-							displayText = i:sub(1,1):upper() .. i:sub(2)
+							module.Children.Parent = button.Parent
+							module.Children.LayoutOrder = button.LayoutOrder + 1
+							module.Children.Visible = true
 						end
-					elseif (matchType == "tag" or matchType == "alias") and self.TagDisplay and self.TagDisplay[i] and self.TagDisplay[i][matchKeyword] then
-						displayText = self.TagDisplay[i][matchKeyword]
-					elseif matchKeyword then
-						if matchKeyword:lower() == lowerSearch then
-							displayText = "MATCHED"
-						else
-							displayText = matchKeyword:sub(1,1):upper() .. matchKeyword:sub(2)
-						end
-					else
-						displayText = "MATCHED"
+						task.defer(refreshLayout)
 					end
 
-					local textWidth = getfontsize(displayText, 11, uipallet.FontSemiBold).X
-					local badgeWidth = math.max(50, textWidth + 12)
+					button.Dots.MouseButton1Click:Connect(toggleOptions)
+					button.Dots.MouseButton2Click:Connect(toggleOptions)
+					button.MouseButton1Click:Connect(function()
+						module:Toggle()
+					end)
+					button.MouseButton2Click:Connect(toggleOptions)
+					button.Destroying:Connect(restoreOptions)
 
-					local badge = Instance.new('Frame')
-					badge.Name = 'SearchBadge'
-					badge.Size = UDim2.fromOffset(badgeWidth, 20) 
-					badge.Position = UDim2.new(1, -(badgeWidth + 5), 0, 10) 
-					badge.BackgroundColor3 = Color3.fromHSV(self.GUIColor.Hue, self.GUIColor.Sat, self.GUIColor.Value)
-					badge.BackgroundTransparency = 0
-					badge.BorderSizePixel = 0
-					badge.Parent = button
-
-					local badgeCorner = Instance.new('UICorner')
-					badgeCorner.CornerRadius = UDim.new(0, 4)
-					badgeCorner.Parent = badge
-
-					local badgeText = Instance.new('TextLabel')
-					badgeText.Size = UDim2.fromScale(1, 1)
-					badgeText.BackgroundTransparency = 1
-					badgeText.Text = displayText
-					badgeText.TextSize = 11
-					badgeText.FontFace = uipallet.FontSemiBold
-					badgeText.Parent = badge
-
-					local colorValue = self.GUIColor.Value
-					if colorValue > 0.7 then
-						badgeText.TextColor3 = Color3.new(0.1, 0.1, 0.1)
-					else
-						badgeText.TextColor3 = Color3.new(1, 1, 1)
+					for _, property in {'Text', 'TextColor3', 'BackgroundColor3'} do
+						listenProperty(module.Object, button, property, button)
+					end
+					local sourceGradient = module.Object:FindFirstChild('UIGradient')
+					local targetGradient = button:FindFirstChild('UIGradient')
+					if sourceGradient and targetGradient then
+						listenProperty(sourceGradient, targetGradient, 'Color', button)
+						listenProperty(sourceGradient, targetGradient, 'Enabled', button)
+					end
+					local sourceDots = module.Object:FindFirstChild('Dots')
+					local targetDots = button:FindFirstChild('Dots')
+					if sourceDots and targetDots and sourceDots:FindFirstChild('Dots') and targetDots:FindFirstChild('Dots') then
+						listenProperty(sourceDots.Dots, targetDots.Dots, 'ImageColor3', button)
 					end
 
-					local tooltipKeyword = matchKeyword or matchType
-					local formattedKeyword = tooltipKeyword:gsub("_", " "):gsub("(%l)(%w*)", function(a,b) return a:upper()..b end)
-					addTooltip(button, "Matched: " .. formattedKeyword)
-				end
-
-				button.Parent = children
-				task.spawn(function()
-					repeat
-						for _, v2 in {'Text', 'TextColor3', 'BackgroundColor3'} do
-							button[v2] = v.Object[v2]
-						end
-						button.UIGradient.Color = v.Object.UIGradient.Color
-						button.UIGradient.Enabled = v.Object.UIGradient.Enabled
-						button.Dots.Dots.ImageColor3 = v.Object.Dots.Dots.ImageColor3
-						task.wait()
-					until not button.Parent
+					button.Parent = children
 				end)
 			end
-			end)
 		end
-		if orderCounter == 0 then
+
+		if #matches == 0 then
 			local emptyLabel = Instance.new('TextLabel')
 			emptyLabel.Name = 'NoResults'
 			emptyLabel.Size = UDim2.fromOffset(220, 40)
@@ -7559,22 +7476,16 @@ function mainapi:CreateSearch()
 			emptyLabel.FontFace = uipallet.Font
 			emptyLabel.Parent = children
 		end
-		task.defer(function()
-			if not searchbkg.Parent then return end
-			local contentY = windowlist.AbsoluteContentSize.Y / math.max(scale.Scale, 0.01)
-			children.CanvasSize = UDim2.fromOffset(0, contentY)
-			searchbkg.Size = UDim2.fromOffset(220, math.min(37 + contentY, 437))
-		end)
+
+		task.defer(refreshLayout)
 	end)
+
 	windowlist:GetPropertyChangedSignal('AbsoluteContentSize'):Connect(function()
 		if self.ThreadFix then
 			setthreadidentity(8)
 		end
-		children.CanvasSize = UDim2.fromOffset(0, windowlist.AbsoluteContentSize.Y / scale.Scale)
-		searchbkg.Size = UDim2.fromOffset(220, math.min(37 + windowlist.AbsoluteContentSize.Y / scale.Scale, 437))
+		refreshLayout()
 	end)
-
-	self.Legit.Icon = legiticon
 end
 
 function mainapi:CreateLegit()
