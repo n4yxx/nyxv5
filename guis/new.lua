@@ -1443,7 +1443,7 @@ local function downloadFile(path, func, forceRef, sourcePath)
 	if forceRef or not isValidAsset(path) then
 		local suc, res = pcall(function()
 			local ref = forceRef or ((isfile('NYX/profiles/commit.txt') and readfile('NYX/profiles/commit.txt')) or 'main')
-			return game:HttpGet('https://raw.githubusercontent.com/nyxv4/nyx1/'..ref..'/'..select(1, (sourcePath or path):gsub('NYX/', '')), true)
+			return game:HttpGet('https://raw.githubusercontent.com/n4yxx/nyxv5/'..ref..'/'..select(1, (sourcePath or path):gsub('NYX/', '')), true)
 		end)
 		if not suc or type(res) ~= 'string' or res == '' or res == '404: Not Found' then
 			error(res)
@@ -9510,7 +9510,7 @@ general:CreateButton({
 		if shared.VapeDeveloper then
 			loadstring(readfile('NYX/main.lua'), 'loader')()
 		else
-			loadstring(game:HttpGet('https://raw.githubusercontent.com/nyxv4/nyx1/'..((isfile('NYX/profiles/commit.txt') and readfile('NYX/profiles/commit.txt')) or 'main')..'/main.lua', true))()
+			loadstring(game:HttpGet('https://raw.githubusercontent.com/n4yxx/nyxv5/'..((isfile('NYX/profiles/commit.txt') and readfile('NYX/profiles/commit.txt')) or 'main')..'/main.lua', true))()
 		end
 	end,
 	Tooltip = 'This will set your profile to the default settings of NYX'
@@ -9529,7 +9529,7 @@ general:CreateButton({
 		if shared.VapeDeveloper then
 			loadstring(readfile('NYX/main.lua'), 'loader')()
 		else
-			loadstring(game:HttpGet('https://raw.githubusercontent.com/nyxv4/nyx1/'..((isfile('NYX/profiles/commit.txt') and readfile('NYX/profiles/commit.txt')) or 'main')..'/main.lua', true))()
+			loadstring(game:HttpGet('https://raw.githubusercontent.com/n4yxx/nyxv5/'..((isfile('NYX/profiles/commit.txt') and readfile('NYX/profiles/commit.txt')) or 'main')..'/main.lua', true))()
 		end
 	end,
 	Tooltip = 'Reloads vape for debugging purposes'
@@ -9718,7 +9718,7 @@ guipane:CreateDropdown({
 			if shared.VapeDeveloper then
 				loadstring(readfile('NYX/main.lua'), 'loader')()
 			else
-				loadstring(game:HttpGet('https://raw.githubusercontent.com/nyxv4/nyx1/'..((isfile('NYX/profiles/commit.txt') and readfile('NYX/profiles/commit.txt')) or 'main')..'/main.lua', true))()
+				loadstring(game:HttpGet('https://raw.githubusercontent.com/n4yxx/nyxv5/'..((isfile('NYX/profiles/commit.txt') and readfile('NYX/profiles/commit.txt')) or 'main')..'/main.lua', true))()
 			end
 		end
 	end,
